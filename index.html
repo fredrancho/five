@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Five — Audio Conf à 5 canaux</title>
+  <meta name="description" content="Five: téléphone virtuel d'audioconférence (5 canaux), sans compte, en un seul fichier HTML." />
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --card: #121820;
+      --muted: #7b8490;
+      --text: #e6edf3;
+      --accent: #4ba3ff;
+      --accent-2: #22d3ee;
+      --danger: #ef4444;
+      --success: #34d399;
+      --ring: 0 0 0 2px color-mix(in oklab, var(--accent) 60%, transparent);
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 80% -10%, #112033 10%, transparent 70%),
+                  radial-gradient(1000px 600px at 10% -10%, #0e1a2a 10%, transparent 70%),
+                  var(--bg);
+      color: var(--text);
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 24px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo {
+      width: 42px; height: 42px; border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: grid; place-items: center; font-weight: 800; color: #00111a;
+      box-shadow: 0 8px 24px rgba(34, 211, 238, .25);
+    }
+    h1 { font-size: 1.6rem; margin: 0; letter-spacing: 0.3px; }
+    .sub { font-size: .9rem; color: var(--muted); }
+
+    .card { background: color-mix(in oklab, var(--card) 92%, black); border: 1px solid #192330; border-radius: var(--radius); padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.02); }
+    .grid { display: grid; gap: 16px; }
+    @media (min-width: 720px) { .grid { grid-template-columns: 1.1fr .9fr; } }
+
+    .channels { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+    .chan-btn { border: 1px solid #1f2a37; background: #101722; color: var(--text); padding: 12px 10px; border-radius: 14px; cursor: pointer; font-weight: 700; letter-spacing: .4px; transition: transform .06s ease, border-color .2s ease, background .2s ease; }
+    .chan-btn:hover { transform: translateY(-1px); }
+    .chan-btn.active { border-color: var(--accent); background: linear-gradient(180deg, #0f1b2a, #0c1521); box-shadow: var(--ring); }
+
+    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; }
+    .controls button, .controls select { width: 100%; }
+
+    .btn {
+      border: 1px solid #1f2a37; background: #0f1622; color: var(--text); padding: 12px 14px; border-radius: 14px; cursor: pointer; font-weight: 700; letter-spacing: .2px;
+      transition: box-shadow .2s ease, transform .06s ease, border-color .2s ease, background .2s ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn.primary { border-color: var(--accent); box-shadow: var(--ring); }
+    .btn.danger { border-color: #3a2121; }
+
+    .row { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+    label { color: var(--muted); font-size: .9rem; }
+    input[type=range] { width: 100%; accent-color: var(--accent); }
+
+    .pill { font-size: .8rem; color: #aab4c0; background: #0d1420; border: 1px solid #1c2632; padding: 6px 10px; border-radius: 999px; }
+
+    .peers { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+    .peer { background: #0c141f; border: 1px solid #1b2531; padding: 10px; border-radius: 12px; display: flex; align-items: center; gap: 10px; }
+    .dot { width: 10px; height: 10px; border-radius: 999px; background: var(--success); box-shadow: 0 0 0 4px rgba(52,211,153,.1); }
+    .dot.muted { background: var(--danger); box-shadow: 0 0 0 4px rgba(239,68,68,.08); }
+
+    canvas { width: 100%; height: 64px; background: #0a1018; border-radius: 12px; border: 1px solid #1a2230; }
+
+    footer { margin-top: 18px; color: var(--muted); font-size: .85rem; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    a { color: var(--accent-2); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo">5</div>
+        <div>
+          <h1>Five</h1>
+          <div class="sub">Téléphone virtuel d'audioconférence — 5 canaux, sans compte</div>
+        </div>
+      </div>
+      <div class="pill" id="status">hors ligne</div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <strong>Canaux</strong>
+            <span class="sub">choisissez 1 à 5</span>
+          </div>
+          <div class="pill" id="roomLabel">canal: —</div>
+        </div>
+        <div class="channels" id="channels"></div>
+
+        <div style="height:10px"></div>
+
+        <div class="controls">
+          <button id="joinBtn" class="btn primary">Rejoindre</button>
+          <button id="leaveBtn" class="btn danger" disabled>Quitter</button>
+        </div>
+
+        <div style="height:12px"></div>
+
+        <div class="row">
+          <label for="micToggle">Micro</label>
+          <button id="micToggle" class="btn">🎙️ Activer micro</button>
+        </div>
+        <div class="row">
+          <label for="vol">Volume</label>
+          <input id="vol" type="range" min="0" max="100" value="80" />
+        </div>
+
+        <div style="height:12px"></div>
+        <label>Visualiseur (barres)</label>
+        <canvas id="viz" height="64"></canvas>
+      </section>
+
+      <aside class="card">
+        <div class="row" style="margin-bottom:8px;">
+          <strong>Participants</strong>
+          <span class="pill"><span id="count">0</span> connecté(s)</span>
+        </div>
+        <div id="peers" class="peers"></div>
+      </aside>
+    </div>
+
+    <footer>
+      <div>⚠️ Prototype P2P basé WebRTC. Aucun compte. L'URL suffit.</div>
+      <div>Signaling public inclus pour tests (modifiable dans le code).</div>
+    </footer>
+  </div>
+
+  <!-- PeerJS pour simplifier WebRTC -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script>
+    /**
+     * \u26a0\ufe0f Notes importantes:
+     * - Cette page utilise WebRTC (via PeerJS) + un WebSocket de signalisation public (PieSocket demo)\n
+     *   pour annoncer les pairs dans un canal. C'est pratique pour un proof-of-concept sans serveur.\n
+     *   Pour la production, remplacez SIGNAL_URL par votre propre serveur WebSocket ou un service géré.\n
+     * - Aucune inscription. Toute personne ayant l'URL peut rejoindre l'un des 5 canaux.\n
+     */
+
+    const SIGNAL_URL_BASE = 'wss://demo.piesocket.com/v3'; // service public de démonstration
+    const SIGNAL_API_KEY = 'demo'; // clé de démo
+
+    // Éléments UI
+    const channelsEl = document.getElementById('channels');
+    const statusEl = document.getElementById('status');
+    const roomLabel = document.getElementById('roomLabel');
+    const joinBtn = document.getElementById('joinBtn');
+    const leaveBtn = document.getElementById('leaveBtn');
+    const micToggle = document.getElementById('micToggle');
+    const vol = document.getElementById('vol');
+    const peersEl = document.getElementById('peers');
+    const countEl = document.getElementById('count');
+    const viz = document.getElementById('viz');
+    const vctx = viz.getContext('2d');
+
+    // App state
+    let currentChannel = null;
+    let ws = null;             // WebSocket de signalisation (par canal)
+    let peer = null;           // PeerJS
+    let myId = null;
+    let localStream = null;    // MediaStream microphone
+    let connectedPeers = new Map(); // peerId -> { call, audioEl }
+
+    // Audio & visualizer
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioCtx();
+    let micSource = null;      // MediaStreamAudioSourceNode
+    let analyser = null;       // AnalyserNode
+    let micEnabled = false;
+
+    // Init UI (5 canaux)
+    for (let i = 1; i <= 5; i++) {
+      const btn = document.createElement('button');
+      btn.className = 'chan-btn';
+      btn.textContent = `Canal ${i}`;
+      btn.dataset.channel = i;
+      btn.addEventListener('click', () => selectChannel(i, btn));
+      channelsEl.appendChild(btn);
+    }
+
+    function selectChannel(ch, btnEl) {
+      [...channelsEl.children].forEach(b => b.classList.remove('active'));
+      btnEl.classList.add('active');
+      currentChannel = ch;
+      roomLabel.textContent = `canal: ${ch}`;
+    }
+
+    // Visualizer loop (bars)
+    function drawViz() {
+      requestAnimationFrame(drawViz);
+      vctx.clearRect(0,0,viz.width,viz.height);
+      if (!analyser) return;
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      analyser.getByteFrequencyData(dataArray);
+      const bars = 32;
+      const step = Math.floor(bufferLength / bars);
+      const w = viz.width / bars;
+      for (let i = 0; i < bars; i++) {
+        const v = dataArray[i * step] / 255; // 0..1
+        const h = v * viz.height;
+        const x = i * w + 2;
+        const y = viz.height - h;
+        vctx.fillStyle = `hsl(${200 + i*1.2}, 70%, ${30 + v*40}%)`;
+        vctx.fillRect(x, y, w - 4, h);
+      }
+    }
+    drawViz();
+
+    async function ensureMic() {
+      if (localStream) return localStream;
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+        micSource = audioCtx.createMediaStreamSource(localStream);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 2048;
+        micSource.connect(analyser);
+        setMicEnabled(false); // démarré en muet
+        return localStream;
+      } catch (e) {
+        alert('Accès au micro refusé ou indisponible.');
+        throw e;
+      }
+    }
+
+    function setMicEnabled(on) {
+      micEnabled = on;
+      if (localStream) {
+        localStream.getAudioTracks().forEach(t => t.enabled = on);
+      }
+      micToggle.textContent = on ? '🔇 Couper micro' : '🎙️ Activer micro';
+      micToggle.classList.toggle('primary', !on);
+    }
+
+    function setStatus(txt) { statusEl.textContent = txt; }
+
+    function updateCount() { countEl.textContent = connectedPeers.size; }
+
+    function addPeerCard(id, muted=false) {
+      const card = document.createElement('div');
+      card.className = 'peer';
+      card.id = `peer-${id}`;
+      const dot = document.createElement('div');
+      dot.className = 'dot' + (muted ? ' muted' : '');
+      const label = document.createElement('div');
+      label.textContent = id;
+      card.appendChild(dot); card.appendChild(label);
+      peersEl.appendChild(card);
+      updateCount();
+    }
+
+    function removePeerCard(id) {
+      const el = document.getElementById(`peer-${id}`);
+      if (el) el.remove();
+      updateCount();
+    }
+
+    function markPeerMuted(id, muted) {
+      const el = document.querySelector(`#peer-${CSS.escape(id)} .dot`);
+      if (el) el.classList.toggle('muted', muted);
+    }
+
+    // Volume global (appliqué aux éléments <audio>)
+    vol.addEventListener('input', () => {
+      const level = parseInt(vol.value, 10) / 100;
+      connectedPeers.forEach(({ audioEl }) => { if (audioEl) audioEl.volume = level; });
+    });
+
+    micToggle.addEventListener('click', () => setMicEnabled(!micEnabled));
+
+    joinBtn.addEventListener('click', async () => {
+      if (!currentChannel) { alert('Choisissez un canal (1-5).'); return; }
+      joinBtn.disabled = true;
+      await startChannel(currentChannel);
+      leaveBtn.disabled = false;
+    });
+
+    leaveBtn.addEventListener('click', async () => {
+      await leaveChannel();
+    });
+
+    async function startChannel(ch) {
+      await ensureMic();
+      setStatus('connexion…');
+
+      // 1) PeerJS
+      peer = new Peer({ host: '0.peerjs.com', port: 443, path: '/', secure: true });
+      myId = null;
+
+      peer.on('open', id => {
+        myId = `five-${ch}-${id}`; // id lisible dans l'UI
+        addPeerCard(myId, !micEnabled);
+        setStatus('en ligne');
+        // 2) WebSocket de signalisation (par canal)
+        const url = `${SIGNAL_URL_BASE}/five-${ch}?api_key=${SIGNAL_API_KEY}&notify_self`;
+        ws = new WebSocket(url);
+        ws.addEventListener('open', () => {
+          ws.send(JSON.stringify({ t: 'join', id: myId, p: id })); // p = peerjs id brut
+        });
+        ws.addEventListener('message', (ev) => {
+          try {
+            const msg = JSON.parse(ev.data);
+            if (msg.t === 'join' && msg.id !== myId) {
+              // Un nouveau pair arrive → on l'appelle (si pas déjà connecté)
+              if (!connectedPeers.has(msg.id)) {
+                callPeer(msg.p, msg.id);
+              }
+            } else if (msg.t === 'bye') {
+              disconnectPeer(msg.id);
+            } else if (msg.t === 'mute' && connectedPeers.has(msg.id)) {
+              markPeerMuted(msg.id, !!msg.muted);
+            }
+          } catch {}
+        });
+      });
+
+      // Répondre aux appels entrants
+      peer.on('call', (call) => {
+        call.answer(localStream);
+        wireCall(call, /*remoteDisplayId*/ `five-${ch}-${call.peer}`);
+      });
+
+      peer.on('disconnected', () => setStatus('reconnexion…'));
+      peer.on('error', (e) => console.warn('Peer error', e));
+    }
+
+    function callPeer(peerjsId, displayId) {
+      const call = peer.call(peerjsId, localStream);
+      wireCall(call, displayId);
+    }
+
+    function wireCall(call, displayId) {
+      call.on('stream', (remoteStream) => {
+        if (connectedPeers.has(displayId)) return; // déjà branché
+        const audio = document.createElement('audio');
+        audio.autoplay = true; audio.playsInline = true; audio.controls = false; audio.volume = parseInt(vol.value, 10)/100;
+        audio.srcObject = remoteStream;
+        document.body.appendChild(audio); // pas visible, juste pour lecture
+        connectedPeers.set(displayId, { call, audioEl: audio });
+        addPeerCard(displayId, false);
+      });
+      call.on('close', () => {
+        const entry = connectedPeers.get(displayId);
+        if (entry && entry.audioEl) entry.audioEl.remove();
+        connectedPeers.delete(displayId);
+        removePeerCard(displayId);
+      });
+      call.on('error', () => call.close());
+    }
+
+    async function leaveChannel() {
+      leaveBtn.disabled = true;
+      joinBtn.disabled = false;
+      setStatus('hors ligne');
+
+      // annoncer départ
+      try { ws && ws.readyState === 1 && ws.send(JSON.stringify({ t: 'bye', id: myId })); } catch {}
+      try { ws && ws.close(); } catch {}
+      ws = null;
+
+      // couper connexions
+      connectedPeers.forEach(({ call, audioEl }, id) => {
+        try { call.close(); } catch {}
+        try { audioEl && audioEl.remove(); } catch {}
+      });
+      connectedPeers.clear();
+      peersEl.innerHTML = '';
+      updateCount();
+
+      // PeerJS
+      try { peer && peer.destroy(); } catch {}
+      peer = null; myId = null;
+
+      // micro reste disponible mais muet par défaut
+      setMicEnabled(false);
+    }
+
+    // notifier mute/unmute aux autres (simple indicateur visuel)
+    const broadcastMuteState = () => {
+      try { ws && ws.readyState === 1 && ws.send(JSON.stringify({ t: 'mute', id: myId, muted: !micEnabled })); } catch {}
+    };
+    micToggle.addEventListener('click', () => setTimeout(broadcastMuteState, 10));
+
+    // Nettoyage onglet fermé
+    window.addEventListener('beforeunload', () => {
+      try { ws && ws.readyState === 1 && ws.send(JSON.stringify({ t: 'bye', id: myId })); } catch {}
+    });
+  </script>
+</body>
+</html>
