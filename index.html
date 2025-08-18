@@ -6,127 +6,34 @@
   <title>Five - Audio Conférence</title>
   <style>
     body {
-      background: linear-gradient(135deg, #0f0f0f, #1c1c1c);
+      background-color: #121212;
       color: #f0f0f0;
-      font-family: 'Poppins', sans-serif;
+      font-family: Arial, sans-serif;
       text-align: center;
       padding: 20px;
-      overflow-x: hidden;
     }
-    h1 {
-      font-size: 2.5em;
-      background: linear-gradient(90deg, #00fff7, #ff00ff);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      margin-bottom: 10px;
-      animation: glow 2s ease-in-out infinite alternate;
-    }
-    @keyframes glow {
-      from { text-shadow: 0 0 5px #00fff7, 0 0 10px #00fff7; }
-      to { text-shadow: 0 0 20px #ff00ff, 0 0 30px #ff00ff; }
-    }
-    p { color: #aaa; }
-    .channels {
-      display: flex;
-      justify-content: center;
-      gap: 15px;
-      margin: 30px 0;
-      flex-wrap: wrap;
-    }
+    h1 { color: #00adb5; }
+    .channels { display: flex; justify-content: center; gap: 10px; margin: 20px 0; }
     button {
-      background: linear-gradient(135deg, #00adb5, #ff00ff);
-      border: none;
-      border-radius: 12px;
-      color: #fff;
-      padding: 12px 25px;
+      background-color: #222;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #f0f0f0;
+      padding: 10px 20px;
       cursor: pointer;
-      font-size: 1em;
-      font-weight: bold;
-      letter-spacing: 1px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-      transition: transform 0.2s, box-shadow 0.3s;
+      transition: background 0.3s;
     }
-    button:hover {
-      transform: translateY(-3px) scale(1.05);
-      box-shadow: 0 6px 20px rgba(255,0,255,0.4);
-    }
-    .controls {
-      margin: 25px 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 20px;
-    }
-    .controls button {
-      background: linear-gradient(135deg, #ff8c00, #ff0080);
-    }
-    input[type=range] {
-      -webkit-appearance: none;
-      width: 150px;
-      height: 6px;
-      border-radius: 5px;
-      background: #333;
-      outline: none;
-    }
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 15px;
-      height: 15px;
-      border-radius: 50%;
-      background: #ff00ff;
-      cursor: pointer;
-      box-shadow: 0 0 10px #ff00ff;
-    }
-    .visualizer {
-      display: flex;
-      align-items: flex-end;
-      height: 80px;
-      gap: 3px;
-      justify-content: center;
-      margin: 30px 0;
-    }
-    .bar {
-      width: 6px;
-      background: linear-gradient(180deg, #ff00ff, #00fff7);
-      height: 5px;
-      border-radius: 3px;
-      transition: height 0.1s;
-    }
-    #participants {
-      margin-top: 30px;
-      text-align: left;
-      max-width: 400px;
-      margin-left: auto;
-      margin-right: auto;
-      background: rgba(255,255,255,0.05);
-      padding: 15px;
-      border-radius: 12px;
-      backdrop-filter: blur(6px);
-      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-    }
-    #participants h3 {
-      background: linear-gradient(90deg, #00fff7, #ff00ff);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .participant {
-      display: flex;
-      align-items: center;
-      margin-bottom: 8px;
-      font-size: 0.9em;
-    }
-    .indicator {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      margin-right: 8px;
-      box-shadow: 0 0 6px rgba(0,0,0,0.8);
-    }
-    .on { background: #0f0; box-shadow: 0 0 8px #0f0; }
-    .off { background: #f00; box-shadow: 0 0 8px #f00; }
+    button:hover { background-color: #00adb5; color: #121212; }
+    .controls { margin: 20px 0; }
+    .visualizer { display: flex; align-items: flex-end; height: 50px; gap: 4px; justify-content: center; }
+    .bar { width: 6px; background: #00adb5; height: 5px; transition: height 0.1s; }
+    #participants { margin-top: 20px; text-align: left; max-width: 400px; margin-left: auto; margin-right: auto; }
+    #participants h3 { color: #00adb5; }
+    .participant { display: flex; align-items: center; margin-bottom: 5px; }
+    .indicator { width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+    .on { background: #0f0; }
+    .off { background: #f00; }
   </style>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <h1>Five</h1>
@@ -142,6 +49,7 @@
   <div class="controls">
     <button onclick="toggleMic()">🎤 Micro ON/OFF</button>
     <input type="range" id="volume" min="0" max="1" step="0.01" value="1" onchange="setVolume(this.value)">
+    <button onclick="enableAudio()">🔊 Activer le son</button>
   </div>
 
   <div class="visualizer" id="visualizer"></div>
@@ -175,12 +83,12 @@
 
         const config = {
           iceServers: [
-            { urls: "stun:stun.l.google.com:19302" } // Serveur STUN public de Google
+            { urls: "stun:stun.l.google.com:19302" }
           ]
         };
 
         const peer = new Peer(undefined, {
-          host: 'five-peerjs.onrender.com', // ✅ Ton serveur PeerJS sur Render
+          host: 'five-peerjs.onrender.com',
           port: 443,
           path: '/',
           secure: true,
@@ -206,8 +114,10 @@
       let audio = document.createElement('audio');
       audio.srcObject = stream;
       audio.autoplay = true;
+      audio.playsInline = true;
       audioElements[id] = audio;
       addParticipant(id, false);
+      audio.play().catch(err => console.warn("Lecture bloquée par le navigateur :", err));
     }
 
     function toggleMic() {
@@ -219,6 +129,12 @@
     function setVolume(val) {
       for (let id in audioElements) {
         audioElements[id].volume = val;
+      }
+    }
+
+    function enableAudio() {
+      for (let id in audioElements) {
+        audioElements[id].play().catch(err => console.log("Impossible de jouer :", err));
       }
     }
 
