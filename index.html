@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Five - Audio Conference</title>
   <style>
-    /* ... ton CSS inchangé ... */
     body {
       background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
       color: #f0f0f0;
@@ -75,9 +74,9 @@
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script>
     let localStream = null;
-    let peer = null;           // Our PeerJS client
-    let peers = {};            // Map of peerId -> call
-    let audioElements = {};    // Map of peerId -> audio element
+    let peer = null;
+    let peers = {};
+    let audioElements = {};
     let channel = null;
     let micEnabled = true;
     let userLocation = null;
@@ -97,11 +96,10 @@
       console.warn("Geolocation denied or unavailable.");
     });
 
-    // --- Simple channel discovery via PeerJS server list API (not scalable, but demo OK) ---
     function joinChannel(num) {
       const selectedRadius = document.querySelector('input[name="radius"]:checked').value;
       channel = num;
-      playBeep(); // beep when switching channel
+      playBeep();
 
       navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
         localStream = stream;
@@ -110,7 +108,7 @@
         // Destroy previous peer if exists (on channel switch)
         if (peer) peer.destroy();
 
-        // Each peer ID is channel-prefixed for scoping
+        // Unique peer ID for this channel
         peer = new Peer('five-' + channel + '-' + Math.random().toString(36).substr(2, 9), {
           host: 'five-peerjs.onrender.com',
           port: 443,
@@ -122,18 +120,17 @@
         peer.on('open', id => {
           addParticipant(id, true);
 
-          // Discover other peers in this channel (demo: fetch from PeerJS server API)
+          // Découverte des autres peers du même canal
           fetch(`https://five-peerjs.onrender.com/peerjs/peers`).then(r=>r.json()).then(list=>{
-            // List: all peer IDs, filter to our channel
+            // Filtrer pour ce canal, appeler chaque peer existant sauf moi-même
             list.filter(pid => pid.startsWith('five-'+channel+'-') && pid !== id).forEach(pid => {
-              // Call each peer
               const call = peer.call(pid, localStream);
               setupCallHandlers(call, pid);
             });
           });
         });
 
-        // Handle incoming call
+        // Appels entrants
         peer.on('call', call => {
           if (checkDistance(userLocation, selectedRadius)) {
             call.answer(localStream);
@@ -144,7 +141,8 @@
           }
         });
 
-        peers = {}; // Reset
+        // Cleanup affichage et objets
+        peers = {};
         audioElements = {};
         document.getElementById('list').innerHTML = '';
       });
@@ -202,7 +200,7 @@
     }
 
     function addParticipant(id, isSelf) {
-      if (document.getElementById('p-' + id)) return; // avoid double
+      if (document.getElementById('p-' + id)) return; // éviter doublon
       const div = document.createElement('div');
       div.classList.add('participant');
       div.id = 'p-' + id;
