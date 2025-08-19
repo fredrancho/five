@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Five - Audio Conference</title>
   <style>
+    /* ... ton CSS inchangé ... */
     body {
       background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
       color: #f0f0f0;
@@ -71,10 +72,12 @@
     <div id="list"></div>
   </div>
 
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script>
-    let localStream;
-    let peers = {};
-    let audioElements = {};
+    let localStream = null;
+    let peer = null;           // Our PeerJS client
+    let peers = {};            // Map of peerId -> call
+    let audioElements = {};    // Map of peerId -> audio element
     let channel = null;
     let micEnabled = true;
     let userLocation = null;
@@ -94,6 +97,7 @@
       console.warn("Geolocation denied or unavailable.");
     });
 
+    // --- Simple channel discovery via PeerJS server list API (not scalable, but demo OK) ---
     function joinChannel(num) {
       const selectedRadius = document.querySelector('input[name="radius"]:checked').value;
       channel = num;
@@ -103,35 +107,56 @@
         localStream = stream;
         setupVisualizer(stream);
 
-        const config = {
-          iceServers: [ { urls: "stun:stun.l.google.com:19302" } ]
-        };
+        // Destroy previous peer if exists (on channel switch)
+        if (peer) peer.destroy();
 
-        const peer = new Peer(undefined, {
+        // Each peer ID is channel-prefixed for scoping
+        peer = new Peer('five-' + channel + '-' + Math.random().toString(36).substr(2, 9), {
           host: 'five-peerjs.onrender.com',
           port: 443,
           path: '/',
           secure: true,
-          config: config
+          config: { iceServers: [ { urls: "stun:stun.l.google.com:19302" } ] }
         });
 
         peer.on('open', id => {
           addParticipant(id, true);
+
+          // Discover other peers in this channel (demo: fetch from PeerJS server API)
+          fetch(`https://five-peerjs.onrender.com/peerjs/peers`).then(r=>r.json()).then(list=>{
+            // List: all peer IDs, filter to our channel
+            list.filter(pid => pid.startsWith('five-'+channel+'-') && pid !== id).forEach(pid => {
+              // Call each peer
+              const call = peer.call(pid, localStream);
+              setupCallHandlers(call, pid);
+            });
+          });
         });
 
+        // Handle incoming call
         peer.on('call', call => {
           if (checkDistance(userLocation, selectedRadius)) {
             call.answer(localStream);
-            call.on('stream', remoteStream => {
-              playStream(call.peer, remoteStream);
-            });
-            playBeep(); // beep when new user connects
+            setupCallHandlers(call, call.peer);
+            playBeep();
           } else {
             console.log("Connection blocked due to distance limit.");
           }
         });
 
-        peers["self"] = peer;
+        peers = {}; // Reset
+        audioElements = {};
+        document.getElementById('list').innerHTML = '';
+      });
+    }
+
+    function setupCallHandlers(call, pid) {
+      peers[pid] = call;
+      call.on('stream', remoteStream => {
+        if (!audioElements[pid]) playStream(pid, remoteStream);
+      });
+      call.on('close', () => {
+        removeParticipant(pid);
       });
     }
 
@@ -147,8 +172,8 @@
 
     function toggleMic() {
       micEnabled = !micEnabled;
-      localStream.getAudioTracks()[0].enabled = micEnabled;
-      updateMicIndicator("self", micEnabled);
+      if(localStream) localStream.getAudioTracks()[0].enabled = micEnabled;
+      updateMicIndicator(peer.id, micEnabled);
     }
 
     function setVolume(val) {
@@ -177,6 +202,7 @@
     }
 
     function addParticipant(id, isSelf) {
+      if (document.getElementById('p-' + id)) return; // avoid double
       const div = document.createElement('div');
       div.classList.add('participant');
       div.id = 'p-' + id;
@@ -188,6 +214,16 @@
       document.getElementById('list').appendChild(div);
     }
 
+    function removeParticipant(id) {
+      const div = document.getElementById('p-' + id);
+      if (div) div.remove();
+      if (audioElements[id]) {
+        audioElements[id].pause();
+        delete audioElements[id];
+      }
+      if (peers[id]) delete peers[id];
+    }
+
     function updateMicIndicator(id, state) {
       const participant = document.getElementById('p-' + id);
       if (participant) {
@@ -196,20 +232,8 @@
       }
     }
 
-    // Haversine formula
-    function getDistanceKm(lat1, lon1, lat2, lon2) {
-      function toRad(x) { return x * Math.PI / 180; }
-      const R = 6371;
-      const dLat = toRad(lat2 - lat1);
-      const dLon = toRad(lon2 - lon1);
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) * Math.sin(dLon/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return R * c;
-    }
-
     function checkDistance(userLoc, radiusKm) {
-      if (!userLoc) return false;
-      // For demo: always allow (real implementation would compare with peers' locations)
+      // Pour la démo : toujours vrai
       return true;
     }
 
@@ -226,6 +250,5 @@
       o.stop(ctx.currentTime + 0.15);
     }
   </script>
-  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </body>
 </html>
