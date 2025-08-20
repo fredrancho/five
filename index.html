@@ -40,6 +40,36 @@
     .on { background: #0f0; }
     .off { background: #f00; }
     .geo-options { margin: 15px 0; }
+    .audio-btns { margin-top: 8px; }
+    .audio-btns button {
+      background: #00fff7;
+      color: #111;
+      border: none;
+      margin-left: 10px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.95em;
+      box-shadow: 0 0 4px #00fff7;
+    }
+    .audio-btns button:hover {
+      background: #1ce2cc;
+      color: #111;
+    }
+    #all-audio-btn {
+      margin-top: 12px;
+      background: #09f0a3;
+      color: #111;
+      border: none;
+      padding: 10px 26px;
+      border-radius: 8px;
+      font-size: 1.05em;
+      box-shadow: 0 0 8px #1ce2cc;
+      cursor: pointer;
+    }
+    #all-audio-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
@@ -71,12 +101,18 @@
     <div id="list"></div>
   </div>
 
+  <div id="audio-buttons"></div>
+  <div>
+    <button id="all-audio-btn" style="display:none;" onclick="activateAllAudio()">▶️ Activer tous les sons</button>
+  </div>
+
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script>
     let localStream = null;
     let peer = null;
     let peers = {};
     let audioElements = {};
+    let audioPlayButtons = {};
     let channel = null;
     let micEnabled = true;
     let userLocation = null;
@@ -105,10 +141,8 @@
         localStream = stream;
         setupVisualizer(stream);
 
-        // Destroy previous peer if exists (on channel switch)
         if (peer) peer.destroy();
 
-        // Unique peer ID for this channel
         peer = new Peer('five-' + channel + '-' + Math.random().toString(36).substr(2, 9), {
           host: 'five-peerjs.onrender.com',
           port: 443,
@@ -122,7 +156,6 @@
 
           // Découverte des autres peers du même canal
           fetch(`https://five-peerjs.onrender.com/peerjs/peers`).then(r=>r.json()).then(list=>{
-            // Filtrer pour ce canal, appeler chaque peer existant sauf moi-même
             list.filter(pid => pid.startsWith('five-'+channel+'-') && pid !== id).forEach(pid => {
               const call = peer.call(pid, localStream);
               setupCallHandlers(call, pid);
@@ -130,7 +163,6 @@
           });
         });
 
-        // Appels entrants
         peer.on('call', call => {
           if (checkDistance(userLocation, selectedRadius)) {
             call.answer(localStream);
@@ -141,10 +173,12 @@
           }
         });
 
-        // Cleanup affichage et objets
         peers = {};
         audioElements = {};
+        audioPlayButtons = {};
         document.getElementById('list').innerHTML = '';
+        document.getElementById('audio-buttons').innerHTML = '';
+        document.getElementById('all-audio-btn').style.display = "none";
       });
     }
 
@@ -161,11 +195,67 @@
     function playStream(id, stream) {
       let audio = document.createElement('audio');
       audio.srcObject = stream;
-      audio.autoplay = true;
+      audio.autoplay = false; // Important: l'utilisateur doit cliquer pour activer
       audio.playsInline = true;
       audioElements[id] = audio;
       addParticipant(id, false);
-      audio.play().catch(err => console.warn("Playback blocked:", err));
+      showPlayButtonForAudio(id, audio);
+      updateAllAudioBtnVisibility();
+    }
+
+    function showPlayButtonForAudio(id, audio) {
+      // Crée un bouton pour activer le son
+      if (audioPlayButtons[id]) return; // déjà créé
+
+      const container = document.getElementById('audio-buttons');
+      const btnDiv = document.createElement('div');
+      btnDiv.className = "audio-btns";
+      btnDiv.id = "btn-audio-"+id;
+
+      const btn = document.createElement('button');
+      btn.textContent = "▶️ Activer le son de " + id.substring(0, 8);
+      btn.onclick = () => {
+        audio.play().then(() => {
+          btn.textContent = "🔊 Son activé";
+          btn.disabled = true;
+          setTimeout(() => btnDiv.remove(), 1200);
+        }).catch(err => {
+          alert("Impossible de lire le son, vérifie les permissions du navigateur.");
+        });
+      };
+      btnDiv.appendChild(btn);
+      container.appendChild(btnDiv);
+      audioPlayButtons[id] = btnDiv;
+      updateAllAudioBtnVisibility();
+    }
+
+    function activateAllAudio() {
+      let btn = document.getElementById('all-audio-btn');
+      btn.disabled = true;
+      let promises = [];
+      for (let id in audioElements) {
+        if (audioElements[id]) {
+          let playPromise = audioElements[id].play().then(() => {
+            if (audioPlayButtons[id]) audioPlayButtons[id].remove();
+          }).catch(() => {});
+          promises.push(playPromise);
+        }
+      }
+      Promise.all(promises).then(() => {
+        btn.textContent = "🔊 Tous les sons sont actifs";
+        setTimeout(() => {
+          btn.style.display = "none";
+          btn.textContent = "▶️ Activer tous les sons";
+          btn.disabled = false;
+        }, 1400);
+      });
+    }
+
+    function updateAllAudioBtnVisibility() {
+      // Affiche le bouton global si plusieurs flux à activer
+      const btn = document.getElementById('all-audio-btn');
+      const nAudio = Object.keys(audioPlayButtons).length;
+      btn.style.display = nAudio > 0 ? "inline-block" : "none";
     }
 
     function toggleMic() {
@@ -219,7 +309,12 @@
         audioElements[id].pause();
         delete audioElements[id];
       }
+      if (audioPlayButtons[id]) {
+        audioPlayButtons[id].remove();
+        delete audioPlayButtons[id];
+      }
       if (peers[id]) delete peers[id];
+      updateAllAudioBtnVisibility();
     }
 
     function updateMicIndicator(id, state) {
