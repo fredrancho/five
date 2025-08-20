@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Five — Live World Map</title>
+  <!-- 
+    Five — Live World Map & City List (stats.html)
+    --------------------------------------------------------------
+    • Connects to Five presence channels five-1 … five-5 via WebSocket
+    • Expects location broadcasts from clients: { t:'loc', id, ch, lat, lon }
+    • Renders a Leaflet world map + a live list of cities/countries per channel
+    • Reverse‑geocodes lat/lon to City, Country using Nominatim (with a small rate‑limited cache)
+
+    IMPORTANT
+    - Replace SIGNAL_URL_BASE / SIGNAL_API_KEY to match your signaling infra if needed.
+    - Be nice to Nominatim (1 req/sec). This page includes a queue + cache.
+  -->
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root{
+      --bg:#0b0f14; --card:#0f1622; --text:#e6edf3; --muted:#93a1b3;
+      --accent:#4ba3ff; --accent2:#22d3ee; --ring:0 0 0 2px rgba(34,211,238,.35);
+      --c1:#4ba3ff; --c2:#22d3ee; --c3:#34d399; --c4:#f59e0b; --c5:#ec4899;
+      --radius:16px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background:
+        radial-gradient(1200px 600px at 85% -10%, #112033 10%, transparent 70%),
+        radial-gradient(1000px 600px at 10% -10%, #0e1a2a 10%, transparent 70%),
+        var(--bg);
+      color:var(--text);
+    }
+    .wrap{max-width:1280px;margin:0 auto;padding:20px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-weight:800;color:#00111a;box-shadow:0 8px 24px rgba(34,211,238,.25)}
+    h1{margin:0;font-size:1.6rem}
+    .sub{color:var(--muted);font-size:.92rem}
+    .pill{font-size:.82rem;color:#aab4c0;background:#0d1420;border:1px solid #1c2632;padding:6px 10px;border-radius:999px}
+    .grid{display:grid;gap:14px}
+    @media(min-width:1000px){.grid{grid-template-columns:1.2fr .8fr}}
+    .card{background:color-mix(in oklab, var(--card) 90%, black);border:1px solid #182233;border-radius:var(--radius);padding:14px;box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.03)}
+
+    #map{width:100%;height:560px;border-radius:14px;border:1px solid #1a2230}
+
+    .legend{display:flex;gap:8px;flex-wrap:wrap}
+    .dot{width:10px;height:10px;border-radius:999px;display:inline-block}
+    .c1{background:var(--c1)} .c2{background:var(--c2)} .c3{background:var(--c3)} .c4{background:var(--c4)} .c5{background:var(--c5)}
+
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .select{appearance:none;background:#0e1521;border:1px solid #1f2a37;color:var(--text);padding:10px 12px;border-radius:12px}
+    .btn{border:1px solid #213043;background:#0f1622;color:var(--text);padding:10px 12px;border-radius:12px;cursor:pointer;font-weight:700;letter-spacing:.2px;transition:transform .06s ease, border-color .2s ease, background .2s ease}
+    .btn:hover{transform:translateY(-1px)}
+
+    table{width:100%;border-collapse:collapse;font-size:.95rem}
+    th,td{padding:8px 10px;border-bottom:1px solid #1b2736}
+    th{color:#a4b1c0;text-align:left;font-weight:700}
+    tbody tr:hover{background:#0e1623}
+
+    .kpi{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+    .kpi .card{padding:10px;text-align:center}
+    .kpi strong{font-size:1.2rem}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo">5</div>
+        <div>
+          <h1>Five — Live World Map</h1>
+          <div class="sub">See active users worldwide across channels 1–5, in real time.</div>
+        </div>
+      </div>
+      <div class="pill" id="status">offline</div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <div class="row" style="justify-content:space-between;margin-bottom:10px">
+          <div class="legend">
+            <span class="pill"><span class="dot c1"></span> 1</span>
+            <span class="pill"><span class="dot c2"></span> 2</span>
+            <span class="pill"><span class="dot c3"></span> 3</span>
+            <span class="pill"><span class="dot c4"></span> 4</span>
+            <span class="pill"><span class="dot c5"></span> 5</span>
+          </div>
+          <div class="row">
+            <select id="filterCh" class="select">
+              <option value="all">All channels</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+            <button class="btn" id="fitBtn">🌍 Fit to markers</button>
+          </div>
+        </div>
+        <div id="map"></div>
+      </section>
+
+      <aside class="card">
+        <div class="kpi">
+          <div class="card"><div>Total</div><strong id="kpiTotal">0</strong></div>
+          <div class="card"><div>Ch 1</div><strong id="kpi1">0</strong></div>
+          <div class="card"><div>Ch 2</div><strong id="kpi2">0</strong></div>
+          <div class="card"><div>Ch 3</div><strong id="kpi3">0</strong></div>
+          <div class="card"><div>Ch 4</div><strong id="kpi4">0</strong></div>
+          <div class="card"><div>Ch 5</div><strong id="kpi5">0</strong></div>
+        </div>
+        <div class="card" style="margin-top:10px">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <strong>Live cities</strong>
+            <span class="pill" id="clock">—</span>
+          </div>
+          <div style="max-height:420px;overflow:auto;margin-top:8px">
+            <table>
+              <thead>
+                <tr><th>City</th><th>Country</th><th>Ch</th><th>Users</th></tr>
+              </thead>
+              <tbody id="citiesRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    // ====== CONFIG ======
+    const SIGNAL_URL_BASE = 'wss://demo.piesocket.com/v3'; // replace with your WS signaling in prod
+    const SIGNAL_API_KEY  = 'demo';
+    const CHANNELS = [1,2,3,4,5];
+    const CH_COLOR = {1:'var(--c1)',2:'var(--c2)',3:'var(--c3)',4:'var(--c4)',5:'var(--c5)'};
+
+    // ====== STATE ======
+    let map;
+    const wsPerChannel = new Map();
+    const users = new Map(); // id -> {id,ch,lat,lon,last,marker,city,country}
+
+    // Geocode cache & queue (Nominatim, 1 req/s)
+    const geocodeCache = new Map(); // key => {city,country}
+    const geocodeQueue = [];
+    let geocodeTimer = null;
+
+    // ====== MAP INIT ======
+    map = L.map('map', { zoomControl: true, scrollWheelZoom: true }).setView([20, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
+
+    // ====== UI HOOKS ======
+    const statusEl = document.getElementById('status');
+    const filterChEl = document.getElementById('filterCh');
+    const fitBtn = document.getElementById('fitBtn');
+    const citiesRows = document.getElementById('citiesRows');
+    const kpiEls = { total: byId('kpiTotal'), 1: byId('kpi1'), 2: byId('kpi2'), 3: byId('kpi3'), 4: byId('kpi4'), 5: byId('kpi5') };
+
+    function byId(id){ return document.getElementById(id); }
+
+    // Live clock
+    setInterval(() => { byId('clock').textContent = new Date().toLocaleTimeString(); }, 1000);
+
+    filterChEl.addEventListener('change', render);
+    fitBtn.addEventListener('click', fitToMarkers);
+
+    // ====== CONNECT WS PER CHANNEL ======
+    CHANNELS.forEach(ch => connectChannel(ch));
+
+    function connectChannel(ch){
+      const url = `${SIGNAL_URL_BASE}/five-${ch}?api_key=${SIGNAL_API_KEY}&notify_self`;
+      const ws = new WebSocket(url);
+      wsPerChannel.set(ch, ws);
+
+      ws.addEventListener('open', () => { statusEl.textContent = 'online'; });
+
+      ws.addEventListener('message', ev => {
+        try{
+          const msg = JSON.parse(ev.data);
+          if(msg.t === 'join'){
+            touchUser(msg.id, ch);
+          } else if(msg.t === 'bye'){
+            removeUser(msg.id);
+          } else if(msg.t === 'loc'){
+            const channel = msg.ch || ch;
+            upsertUser(msg.id, channel, msg.lat, msg.lon);
+          }
+        }catch(e){ /* ignore */ }
+      });
+
+      ws.addEventListener('close', () => setTimeout(() => connectChannel(ch), 4000));
+      ws.addEventListener('error', () => {});
+    }
+
+    // ====== USER CRUD ======
+    function shortId(id){ return (id && id.length>10) ? '…'+id.slice(-10) : (id||'—'); }
+
+    function markerFor(u){
+      if(!u.marker){
+        u.marker = L.circleMarker([u.lat, u.lon], { radius: 6, color: CH_COLOR[u.ch] || '#4ba3ff', weight: 2, fillColor: CH_COLOR[u.ch] || '#4ba3ff', fillOpacity: .6 })
+          .addTo(map)
+          .bindPopup(`<b>${shortId(u.id)}</b><br/>Channel ${u.ch}${u.city?`<br/>${escapeHtml(u.city)}, ${escapeHtml(u.country||'')}`:''}`);
+      } else {
+        u.marker.setLatLng([u.lat, u.lon]);
+        u.marker.setStyle({ color: CH_COLOR[u.ch], fillColor: CH_COLOR[u.ch] });
+      }
+    }
+
+    function upsertUser(id, ch, lat, lon){
+      let u = users.get(id);
+      if(!u){ u = { id, ch, lat, lon, last: Date.now(), marker:null, city:null, country:null }; users.set(id, u); }
+      else { u.ch = ch ?? u.ch; u.lat = lat ?? u.lat; u.lon = lon ?? u.lon; u.last = Date.now(); }
+      if(u.lat!=null && u.lon!=null){
+        markerFor(u);
+        queueReverseGeocode(u);
+      }
+      render();
+    }
+
+    function touchUser(id, ch){
+      const now = Date.now();
+      let u = users.get(id);
+      if(!u){ u = { id, ch, lat:null, lon:null, last: now, marker:null, city:null, country:null }; users.set(id, u); }
+      else { u.last = now; u.ch = ch ?? u.ch; }
+      render();
+    }
+
+    function removeUser(id){
+      const u = users.get(id);
+      if(!u) return;
+      if(u.marker){ try{ map.removeLayer(u.marker); }catch{} }
+      users.delete(id);
+      render();
+    }
+
+    // GC users not heard from in 2 minutes
+    setInterval(() => {
+      const now = Date.now();
+      for(const [id,u] of users){ if(now - u.last > 120000) removeUser(id); }
+    }, 10000);
+
+    // ====== REVERSE GEOCODING (NOMINATIM) ======
+    function keyFor(lat, lon){ return `${lat.toFixed(3)},${lon.toFixed(3)}`; }
+
+    function queueReverseGeocode(u){
+      if(!u || u.lat==null || u.lon==null) return;
+      const key = keyFor(u.lat,u.lon);
+      if(geocodeCache.has(key)){
+        const {city,country} = geocodeCache.get(key);
+        u.city = city; u.country = country;
+        if(u.marker){ u.marker.setPopupContent(`<b>${shortId(u.id)}</b><br/>Channel ${u.ch}<br/>${escapeHtml(city||'')}${country?`, ${escapeHtml(country)}`:''}`); }
+        render();
+        return;
+      }
+      // Deduplicate queued requests for same key
+      if(geocodeQueue.find(q => q.key===key)) return;
+      geocodeQueue.push({ key, lat:u.lat, lon:u.lon, apply: (city,country)=>{
+        // Apply to all users with same rounded key
+        for(const uu of users.values()){
+          if(uu.lat==null||uu.lon==null) continue;
+          if(keyFor(uu.lat,uu.lon)===key){ uu.city=city; uu.country=country; if(uu.marker){ uu.marker.setPopupContent(`<b>${shortId(uu.id)}</b><br/>Channel ${uu.ch}<br/>${escapeHtml(city||'')}${country?`, ${escapeHtml(country)}`:''}`); } }
+        }
+        render();
+      }});
+      runGeocodeQueue();
+    }
+
+    function runGeocodeQueue(){
+      if(geocodeTimer || geocodeQueue.length===0) return;
+      geocodeTimer = setInterval(async () => {
+        const job = geocodeQueue.shift();
+        if(!job){ clearInterval(geocodeTimer); geocodeTimer=null; return; }
+        try{
+          const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(job.lat)}&lon=${encodeURIComponent(job.lon)}&zoom=10&accept-language=en`;
+          const res = await fetch(url, { headers: { 'User-Agent': 'Five-Stats/1.0 (+https://example.com)', 'Referer': location.href } });
+          const data = await res.json();
+          const a = data.address || {};
+          const city = a.city || a.town || a.village || a.hamlet || a.suburb || a.county || a.state || data.name || null;
+          const country = a.country || null;
+          geocodeCache.set(job.key, { city, country });
+          job.apply(city, country);
+        }catch(e){ /* ignore network errors, try next */ }
+      }, 1100); // ~1 req/s
+    }
+
+    // ====== RENDER ======
+    function render(){
+      const filter = filterChEl.value; // 'all' or '1'..'5'
+      const counts = { total:0, 1:0, 2:0, 3:0, 4:0, 5:0 };
+
+      // Update markers visibility by filter
+      for(const u of users.values()){
+        const visible = (filter==='all' || String(u.ch)===filter);
+        if(u.marker) u.marker.setStyle({ opacity: visible?1:0.2, fillOpacity: visible?0.6:0.15 });
+        if(visible) counts.total++;
+        if(visible) counts[u.ch] = (counts[u.ch]||0)+1;
+      }
+
+      // KPI
+      kpiEls.total.textContent = counts.total;
+      for(let i=1;i<=5;i++) kpiEls[i].textContent = counts[i]||0;
+
+      // Cities table (aggregate city+country+ch)
+      const bucket = new Map(); // key: city|country|ch -> count
+      for(const u of users.values()){
+        if(filter!=='all' && String(u.ch)!==filter) continue;
+        if(!u.city && !u.country) continue;
+        const city = u.city || '—';
+        const country = u.country || '—';
+        const key = `${city}|${country}|${u.ch}`;
+        bucket.set(key, (bucket.get(key)||0) + 1);
+      }
+
+      const rows = [...bucket.entries()].map(([key,count]) => {
+        const [city,country,ch] = key.split('|');
+        return { city, country, ch:Number(ch), count };
+      }).sort((a,b) => b.count - a.count);
+
+      citiesRows.innerHTML = '';
+      for(const r of rows){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHtml(r.city)}</td><td>${escapeHtml(r.country)}</td><td>${r.ch}</td><td>${r.count}</td>`;
+        citiesRows.appendChild(tr);
+      }
+    }
+
+    function fitToMarkers(){
+      const pts = [];
+      for(const u of users.values()) if(u.marker) pts.push(u.marker.getLatLng());
+      if(pts.length){
+        const group = new L.featureGroup(pts.map(p => L.marker(p)));
+        map.fitBounds(group.getBounds().pad(0.2));
+      }
+    }
+
+    function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])); }
+  </script>
+</body>
+</html>
