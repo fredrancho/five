@@ -3,85 +3,73 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Five - Geo & Audio Fix</title>
+  <title>Five - Final Version</title>
   <style>
-    body {
-      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-      color: #f0f0f0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      text-align: center;
-      padding: 20px;
-    }
-    h1 { 
-      color: #00fff7;
-      font-size: 2.5em;
-      text-shadow: 0 0 10px #00fff7;
-    }
-    .channels { display: flex; justify-content: center; gap: 12px; margin: 20px 0; flex-wrap: wrap; }
-    button {
-      background: #111;
-      border: 1px solid #333;
-      border-radius: 10px;
-      color: #f0f0f0;
-      padding: 12px 24px;
-      cursor: pointer;
-      font-size: 1em;
-      transition: all 0.3s;
-      box-shadow: 0 0 8px rgba(0,255,247,0.4);
-    }
+    body { background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); color: #f0f0f0; font-family: 'Segoe UI', sans-serif; text-align: center; padding: 20px; margin: 0; }
+    h1 { color: #00fff7; font-size: 2.5em; text-shadow: 0 0 10px #00fff7; }
+    button { background: #111; border: 1px solid #333; border-radius: 10px; color: #f0f0f0; padding: 12px 24px; cursor: pointer; font-size: 1em; transition: all 0.3s; box-shadow: 0 0 8px rgba(0,255,247,0.4); }
     button:hover { background-color: #00fff7; color: #111; box-shadow: 0 0 15px #00fff7; }
     button:disabled { cursor: not-allowed; opacity: 0.5; }
+    .hidden { display: none; }
+    #app-container { display: flex; flex-direction: column; align-items: center; }
+    #unlock-audio-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 100; }
+    #unlock-audio-container button { font-size: 1.5em; padding: 20px 40px; }
+    .channels { display: flex; justify-content: center; gap: 12px; margin: 20px 0; flex-wrap: wrap; }
     .controls { margin: 20px 0; }
     .visualizer { display: flex; align-items: flex-end; height: 60px; gap: 4px; justify-content: center; margin-top: 20px; }
     .bar { width: 6px; background: #00fff7; height: 5px; transition: height 0.1s; border-radius: 2px; }
-    #participants { margin-top: 20px; text-align: left; max-width: 400px; margin-left: auto; margin-right: auto; background: rgba(0,0,0,0.4); padding: 12px; border-radius: 10px; }
+    #participants { margin-top: 20px; text-align: left; max-width: 400px; width: 90%; margin-left: auto; margin-right: auto; background: rgba(0,0,0,0.4); padding: 12px; border-radius: 10px; }
     #participants h3 { color: #00fff7; margin-bottom: 8px; }
     .participant { display: flex; align-items: center; margin-bottom: 5px; }
-    .indicator { width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
-    .on { background: #0f0; }
-    .off { background: #f00; }
+    .indicator { width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+    .on { background: #0f0; } .off { background: #f00; }
     .geo-options { margin: 15px 0; }
   </style>
 </head>
 <body>
-  <h1>Five (Geo & Audio Fix)</h1>
-  <p>Select a channel to join the audio conference:</p>
 
-  <div class="geo-options">
-    <label><input type="radio" name="radius" value="5"> Limite 5 km</label>
-    <label style="margin-left:15px;"><input type="radio" name="radius" value="25" checked> Limite 25 km</label>
+  <!-- Écran de déverrouillage audio -->
+  <div id="unlock-audio-container">
+    <button onclick="unlockAudioContext()">🔊 Entrer dans Five</button>
   </div>
 
-  <div class="channels">
-    <button onclick="joinChannel(1)">1</button>
-    <button onclick="joinChannel(2)">2</button>
-    <button onclick="joinChannel(3)">3</button>
-    <button onclick="joinChannel(4)">4</button>
-    <button onclick="joinChannel(5)">5</button>
-  </div>
-  
-  <div class="controls">
-    <button onclick="toggleMic()">🎤 Mic ON/OFF</button>
-    <input type="range" id="volume" min="0" max="1" step="0.01" value="1" onchange="setVolume(this.value)">
+  <div id="app-container" class="hidden">
+    <h1>Five</h1>
+    <p>Select a channel to join the audio conference:</p>
+
+    <div class="geo-options">
+      <label><input type="radio" name="radius" value="5"> Limite 5 km</label>
+      <label style="margin-left:15px;"><input type="radio" name="radius" value="25" checked> Limite 25 km</label>
+    </div>
+
+    <div class="channels">
+      <button onclick="joinChannel(1)">1</button>
+      <button onclick="joinChannel(2)">2</button>
+      <button onclick="joinChannel(3)">3</button>
+      <button onclick="joinChannel(4)">4</button>
+      <button onclick="joinChannel(5)">5</button>
+    </div>
+    
+    <div class="controls">
+      <button onclick="toggleMic()">🎤 Mic ON/OFF</button>
+      <input type="range" id="volume" min="0" max="1" step="0.01" value="1" onchange="setVolume(this.value)">
+    </div>
+
+    <div class="visualizer" id="visualizer"></div>
+
+    <div id="participants">
+      <h3>Participants connectés</h3>
+      <div id="list"></div>
+    </div>
   </div>
 
-  <div class="visualizer" id="visualizer"></div>
-
-  <div id="participants">
-    <h3>Connected participants</h3>
-    <div id="list"></div>
-  </div>
-
-  <!-- PeerJS Library -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-  
-  <!-- Firebase Libraries -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   
   <script>
     // --- 1. CONFIGURATION FIREBASE ---
-    // TODO: Remplacez ceci par la configuration de VOTRE projet Firebase
+    // TODO: Remplacez par votre configuration Firebase
     const firebaseConfig = {
       apiKey: "AIza...",
       authDomain: "your-project-id.firebaseapp.com",
@@ -91,22 +79,41 @@
       messagingSenderId: "...",
       appId: "..."
     };
-
-    // --- 2. INITIALISATION ---
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    let localStream = null;
-    let peer = null;
-    let peers = {}; // Stocke les objets d'appel (calls)
-    let audioElements = {}; // Stocke les éléments <audio>
-    let currentChannel = null;
-    let currentChannelRef = null;
+    // --- 2. VARIABLES GLOBALES ---
+    let localStream, peer, currentChannel, currentChannelRef, userLocation;
+    let peers = {};
+    let audioElements = {};
     let micEnabled = true;
-    let userLocation = null; // Stockera {lat, lon}
     const bars = [];
+    let audioContextUnlocked = false;
 
-    // Setup visualizer
+    // --- 3. LOGIQUE DE L'APPLICATION ---
+    
+    // Étape 2 : Déverrouillage du contexte audio
+    function unlockAudioContext() {
+        if (audioContextUnlocked) return;
+        const context = new (window.AudioContext || window.webkitAudioContext)();
+        // Joue un son silencieux pour activer le contexte
+        const source = context.createBufferSource();
+        source.buffer = context.createBuffer(1, 1, 22050);
+        source.connect(context.destination);
+        source.start(0);
+        
+        // Gère les états "suspendus" sur certains navigateurs
+        if (context.state === 'suspended') {
+            context.resume();
+        }
+        
+        audioContextUnlocked = true;
+        console.log("Audio Context unlocked.");
+        document.getElementById('unlock-audio-container').classList.add('hidden');
+        document.getElementById('app-container').classList.remove('hidden');
+    }
+
+    // Initialisation du visualiseur
     for (let i = 0; i < 32; i++) {
         const bar = document.createElement('div');
         bar.classList.add('bar');
@@ -115,42 +122,33 @@
     }
     
     function joinChannel(channelNum) {
+        if (!audioContextUnlocked) {
+            alert("Veuillez d'abord cliquer sur 'Entrer' pour activer l'audio.");
+            return;
+        }
         document.querySelectorAll('.channels button').forEach(b => b.disabled = true);
         
-        // 1. Obtenir la géolocalisation d'abord
         navigator.geolocation.getCurrentPosition(
             (position) => {
-                userLocation = {
-                    lat: position.coords.latitude,
-                    lon: position.coords.longitude
-                };
-                console.log("Location obtained:", userLocation);
-                // Une fois la localisation obtenue, on continue
+                userLocation = { lat: position.coords.latitude, lon: position.coords.longitude };
                 startConference(channelNum);
             },
             (error) => {
-                alert("Impossible d'obtenir la géolocalisation. Veuillez l'autoriser pour utiliser l'application.");
-                console.error("Geolocation error:", error);
+                alert("Géolocalisation requise. Veuillez l'autoriser.");
                 document.querySelectorAll('.channels button').forEach(b => b.disabled = false);
             }
         );
     }
 
     async function startConference(channelNum) {
-      if (currentChannel === channelNum) return;
       playBeep();
-      
       if (peer) {
-        if (currentChannelRef) {
-            currentChannelRef.child(peer.id).remove();
-            currentChannelRef.off();
-        }
+        if (currentChannelRef) currentChannelRef.child(peer.id).remove();
         peer.destroy();
       }
       document.getElementById('list').innerHTML = '';
       Object.values(audioElements).forEach(audio => audio.remove());
-      peers = {};
-      audioElements = {};
+      peers = {}; audioElements = {};
 
       try {
         localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -163,11 +161,29 @@
       currentChannel = channelNum;
       currentChannelRef = database.ref('channels/channel-' + currentChannel);
       
-      peer = new Peer({
-        config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }
-      });
+      // Étape 1 : Configuration réseau robuste
+      const iceConfig = {
+          iceServers: [
+              { urls: "stun:stun.l.google.com:19302" },
+              { urls: "stun:stun1.l.google.com:19302" },
+              // Serveurs TURN de secours (service public pour test)
+              {
+                  urls: "turn:openrelay.metered.ca:80",
+                  username: "openrelayproject",
+                  credential: "openrelayproject"
+              },
+              {
+                  urls: "turn:openrelay.metered.ca:443",
+                  username: "openrelayproject",
+                  credential: "openrelayproject"
+              }
+          ]
+      };
+
+      peer = new Peer({ config: iceConfig });
 
       peer.on('open', (id) => {
+        console.log("PeerJS initialisé avec l'ID:", id);
         addParticipant(id, true);
         const myData = { lat: userLocation.lat, lon: userLocation.lon };
         const myRef = currentChannelRef.child(id);
@@ -183,18 +199,12 @@
           const selectedRadius = document.querySelector('input[name="radius"]:checked').value;
           
           if (distance <= selectedRadius) {
-              console.log(`Peer ${newPeerId} is in range (${distance.toFixed(2)} km). Calling.`);
-              // On envoie notre position pour que l'autre puisse vérifier à son tour
+              console.log(`Appel du pair ${newPeerId} qui est à portée.`);
               const call = peer.call(newPeerId, localStream, { metadata: { location: userLocation } });
               setupCallHandlers(call);
-          } else {
-              console.log(`Peer ${newPeerId} is out of range (${distance.toFixed(2)} km). Ignoring.`);
           }
         });
-
-        currentChannelRef.on('child_removed', (snapshot) => {
-          removeParticipant(snapshot.key);
-        });
+        currentChannelRef.on('child_removed', (snapshot) => removeParticipant(snapshot.key));
       });
 
       peer.on('call', (call) => {
@@ -203,139 +213,83 @@
         const selectedRadius = document.querySelector('input[name="radius"]:checked').value;
 
         if (distance <= selectedRadius) {
-            console.log(`Answering call from ${call.peer}, who is in range.`);
+            console.log(`Réponse à l'appel de ${call.peer} qui est à portée.`);
             call.answer(localStream);
             playBeep();
             setupCallHandlers(call);
         } else {
-            console.log(`Rejecting call from ${call.peer}, out of range.`);
-            // On ne fait rien, l'appel sera en timeout pour l'appelant.
+            console.log(`Rejet de l'appel de ${call.peer}, hors de portée.`);
         }
       });
-
-      peer.on('error', (err) => console.error('PeerJS error:', err));
+      peer.on('error', (err) => console.error('Erreur PeerJS:', err));
       document.querySelectorAll('.channels button').forEach(b => b.disabled = false);
     }
 
     function setupCallHandlers(call) {
+      console.log(`Configuration des handlers pour l'appel avec ${call.peer}`);
       const remotePeerId = call.peer;
       peers[remotePeerId] = call;
-      call.on('stream', (remoteStream) => playStream(remotePeerId, remoteStream));
+      call.on('stream', (remoteStream) => {
+          console.log(`FLUX REÇU de ${remotePeerId}!`);
+          playStream(remotePeerId, remoteStream);
+      });
       call.on('close', () => removeParticipant(remotePeerId));
-      call.on('error', () => removeParticipant(remotePeerId));
+      call.on('error', (err) => {
+          console.error(`Erreur d'appel avec ${remotePeerId}:`, err);
+          removeParticipant(remotePeerId);
+      });
     }
 
     function playStream(id, stream) {
       if (audioElements[id]) return;
-
+      console.log(`Tentative de lecture du flux pour ${id}`);
       const audio = document.createElement('audio');
-      // **CORRECTION AUDIO CRUCIALE** : L'élément doit être dans le DOM pour une lecture fiable.
       document.body.appendChild(audio);
       audio.srcObject = stream;
-      audio.playsInline = true;
-      audio.autoplay = true; // Renforce l'intention de jouer le son
+      audio.playsInline = true; // Crucial pour iOS
       audio.volume = document.getElementById('volume').value;
-      
-      audio.play().catch(error => console.error(`La lecture auto a échoué pour ${id}:`, error));
+      const playPromise = audio.play();
+
+      if (playPromise !== undefined) {
+        playPromise.then(_ => {
+          console.log(`LECTURE RÉUSSIE pour ${id}`);
+        }).catch(error => {
+          console.error(`ERREUR DE LECTURE pour ${id}:`, error);
+          alert("Le navigateur a bloqué la lecture automatique du son. Essayez d'interagir avec la page.");
+        });
+      }
       
       audioElements[id] = audio;
       addParticipant(id, false);
     }
 
-    function removeParticipant(id) {
-        const div = document.getElementById('p-' + id);
-        if (div) div.remove();
-        
-        if (audioElements[id]) {
-            audioElements[id].pause();
-            audioElements[id].srcObject = null;
-            // **CORRECTION NETTOYAGE** : On retire l'élément audio du DOM
-            document.body.removeChild(audioElements[id]);
-            delete audioElements[id];
-        }
-        if (peers[id]) {
-            peers[id].close();
-            delete peers[id];
-        }
-    }
-    
-    function haversineDistance(coords1, coords2) {
-        function toRad(x) { return x * Math.PI / 180; }
-        const R = 6371; // Rayon de la Terre en km
+    // --- Fonctions utilitaires ---
+    const haversineDistance = (coords1, coords2) => {
+        const toRad = x => x * Math.PI / 180;
+        const R = 6371;
         const dLat = toRad(coords2.lat - coords1.lat);
         const dLon = toRad(coords2.lon - coords1.lon);
-        const lat1 = toRad(coords1.lat);
-        const lat2 = toRad(coords2.lat);
-
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-    }
-
-    // --- Fonctions utilitaires (peu ou pas modifiées) ---
-    function toggleMic() { /* ... (inchangé) ... */ }
-    function setVolume(val) { /* ... (inchangé) ... */ }
-    function setupVisualizer(stream) { /* ... (inchangé) ... */ }
-    function addParticipant(id, isSelf) { /* ... (inchangé) ... */ }
-    function updateMicIndicator(id, state) { /* ... (inchangé) ... */ }
-    function playBeep() { /* ... (inchangé) ... */ }
-
-    // On recopie les fonctions utilitaires ici pour que le code soit complet
-    function toggleMic() {
-      if (!localStream) return;
-      micEnabled = !micEnabled;
-      localStream.getAudioTracks()[0].enabled = micEnabled;
-      if (peer) updateMicIndicator(peer.id, micEnabled);
-    }
-    function setVolume(val) {
-      for (let id in audioElements) { audioElements[id].volume = val; }
-    }
-    function setupVisualizer(stream) {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const analyser = audioCtx.createAnalyser();
-      const source = audioCtx.createMediaStreamSource(stream);
-      source.connect(analyser);
-      analyser.fftSize = 64;
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-      function draw() {
-        if (!localStream) return;
-        requestAnimationFrame(draw);
-        analyser.getByteFrequencyData(dataArray);
-        for (let i = 0; i < bars.length; i++) {
-          bars[i].style.height = (micEnabled ? dataArray[i] / 2 : 5) + 'px';
-        }
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(coords1.lat)) * Math.cos(toRad(coords2.lat)) * Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+    const removeParticipant = id => {
+      document.getElementById('p-' + id)?.remove();
+      if (audioElements[id]) {
+        audioElements[id].remove();
+        delete audioElements[id];
       }
-      draw();
-    }
-    function addParticipant(id, isSelf) {
-      if (document.getElementById('p-' + id)) return;
-      const div = document.createElement('div');
-      div.classList.add('participant');
-      div.id = 'p-' + id;
-      const indicator = document.createElement('div');
-      indicator.classList.add('indicator', (isSelf && micEnabled) ? 'on' : 'off');
-      div.appendChild(indicator);
-      div.appendChild(document.createTextNode(isSelf ? `Moi (${id.substring(0, 8)}...)` : `${id.substring(0, 8)}...`));
-      document.getElementById('list').appendChild(div);
-    }
-    function updateMicIndicator(id, state) {
-      const participant = document.getElementById('p-' + id);
-      if (participant) {
-        const indicator = participant.querySelector('.indicator');
-        indicator.className = 'indicator ' + (state ? 'on' : 'off');
+      if (peers[id]) {
+        peers[id].close();
+        delete peers[id];
       }
-    }
-    function playBeep() {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = "sine"; o.frequency.setValueAtTime(600, ctx.currentTime);
-      g.gain.setValueAtTime(0.05, ctx.currentTime);
-      o.connect(g); g.connect(ctx.destination);
-      o.start(); o.stop(ctx.currentTime + 0.15);
-    }
+    };
+    // Copiez les fonctions toggleMic, setVolume, setupVisualizer, addParticipant, updateMicIndicator, playBeep de la version précédente, elles sont inchangées.
+    function toggleMic() {if(!localStream)return;micEnabled=!micEnabled;localStream.getAudioTracks()[0].enabled=micEnabled;if(peer)updateMicIndicator(peer.id,micEnabled);}
+    function setVolume(val){for(let id in audioElements){audioElements[id].volume=val;}}
+    function setupVisualizer(stream){const a=new(window.AudioContext||window.webkitAudioContext)(),b=a.createAnalyser(),c=a.createMediaStreamSource(stream);c.connect(b),b.fftSize=64;const d=b.frequencyBinCount,e=new Uint8Array(d);!function f(){if(localStream){requestAnimationFrame(f),b.getByteFrequencyData(e);for(let g=0;g<bars.length;g++)bars[g].style.height=(micEnabled?e[g]/2:5)+"px"}}();}
+    function addParticipant(id,isSelf){if(document.getElementById("p-"+id))return;const a=document.createElement("div");a.className="participant",a.id="p-"+id;const b=document.createElement("div");b.className="indicator "+(isSelf&&micEnabled?"on":"off"),a.appendChild(b),a.appendChild(document.createTextNode(isSelf?`Moi (${id.substring(0,8)}...)`:`${id.substring(0,8)}...`)),document.getElementById("list").appendChild(a);}
+    function updateMicIndicator(id,state){const a=document.getElementById("p-"+id);if(a){const b=a.querySelector(".indicator");b.className="indicator "+(state?"on":"off");}}
+    function playBeep(){const a=new(window.AudioContext||window.webkitAudioContext)(),b=a.createOscillator(),c=a.createGain();b.type="sine",b.frequency.setValueAtTime(600,a.currentTime),c.gain.setValueAtTime(.05,a.currentTime),b.connect(c),c.connect(a.destination),b.start(),b.stop(a.currentTime+.15);}
   </script>
 </body>
 </html>
