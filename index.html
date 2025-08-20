@@ -16,6 +16,7 @@
       color: #00fff7;
       font-size: 2.5em;
       text-shadow: 0 0 10px #00fff7;
+      margin-bottom: 8px;
     }
     .channels { display: flex; justify-content: center; gap: 12px; margin: 20px 0; flex-wrap: wrap; }
     button {
@@ -30,7 +31,7 @@
       box-shadow: 0 0 8px rgba(0,255,247,0.4);
     }
     button:hover { background-color: #00fff7; color: #111; box-shadow: 0 0 15px #00fff7; }
-    .controls { margin: 20px 0; }
+    .controls { margin: 20px 0; display: flex; align-items: center; justify-content: center; gap: 18px; }
     .visualizer { display: flex; align-items: flex-end; height: 60px; gap: 4px; justify-content: center; margin-top: 20px; }
     .bar { width: 6px; background: #00fff7; height: 5px; transition: height 0.1s; border-radius: 2px; }
     #participants { margin-top: 20px; text-align: left; max-width: 400px; margin-left: auto; margin-right: auto; background: rgba(0,0,0,0.4); padding: 12px; border-radius: 10px; }
@@ -65,22 +66,28 @@
       font-size: 1.05em;
       box-shadow: 0 0 8px #1ce2cc;
       cursor: pointer;
+      display: none;
     }
     #all-audio-btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
+    }
+    #geo-msg {
+      color: #f66;
+      margin: 10px 0 0 0;
+      font-size: 1em;
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
   <h1>Five</h1>
   <p>Select a channel to join the audio conference:</p>
-
   <div class="geo-options">
     <label><input type="radio" name="radius" value="5"> Limit to 5 km</label>
     <label style="margin-left:15px;"><input type="radio" name="radius" value="25" checked> Limit to 25 km</label>
   </div>
-
+  <div id="geo-msg"></div>
   <div class="channels">
     <button onclick="joinChannel(1)">1</button>
     <button onclick="joinChannel(2)">2</button>
@@ -88,24 +95,19 @@
     <button onclick="joinChannel(4)">4</button>
     <button onclick="joinChannel(5)">5</button>
   </div>
-  
   <div class="controls">
     <button onclick="toggleMic()">🎤 Mic ON/OFF</button>
     <input type="range" id="volume" min="0" max="1" step="0.01" value="1" onchange="setVolume(this.value)">
   </div>
-
   <div class="visualizer" id="visualizer"></div>
-
   <div id="participants">
     <h3>Connected participants</h3>
     <div id="list"></div>
   </div>
-
   <div id="audio-buttons"></div>
   <div>
-    <button id="all-audio-btn" style="display:none;" onclick="activateAllAudio()">▶️ Activer tous les sons</button>
+    <button id="all-audio-btn" onclick="activateAllAudio()">▶️ Activer tous les sons</button>
   </div>
-
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script>
     let localStream = null;
@@ -116,7 +118,11 @@
     let channel = null;
     let micEnabled = true;
     let userLocation = null;
+    let geoAllowed = false;
+    let geoDenied = false;
+    let myCoords = null;
     const bars = [];
+    const geoMsg = document.getElementById('geo-msg');
 
     // Setup visualizer
     for (let i = 0; i < 32; i++) {
@@ -126,14 +132,32 @@
       bars.push(bar);
     }
 
-    navigator.geolocation.getCurrentPosition(pos => {
-      userLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-    }, err => {
-      console.warn("Geolocation denied or unavailable.");
-    });
+    // Geolocation
+    function askGeolocation() {
+      if (!navigator.geolocation) {
+        geoMsg.innerText = "Geolocation not supported by your browser.";
+        geoDenied = true;
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(pos => {
+        userLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        geoAllowed = true;
+        geoDenied = false;
+        geoMsg.innerText = "";
+      }, err => {
+        geoMsg.innerText = "Geolocation denied or unavailable. Audio connection will be blocked.";
+        geoDenied = true;
+        geoAllowed = false;
+      }, { enableHighAccuracy: true });
+    }
+    askGeolocation();
 
     function joinChannel(num) {
-      const selectedRadius = document.querySelector('input[name="radius"]:checked').value;
+      if (geoDenied) {
+        alert("Geolocation is required to join a channel.");
+        return;
+      }
+      const selectedRadius = Number(document.querySelector('input[name="radius"]:checked').value);
       channel = num;
       playBeep();
 
@@ -148,29 +172,94 @@
           port: 443,
           path: '/',
           secure: true,
-          config: { iceServers: [ { urls: "stun:stun.l.google.com:19302" } ] }
+          config: {
+            iceServers: [
+              { urls: "stun:stun.l.google.com:19302" },
+              {
+                urls: "turn:openrelay.metered.ca:80",
+                username: "openrelayproject",
+                credential: "openrelayproject"
+              },
+              {
+                urls: "turn:openrelay.metered.ca:443",
+                username: "openrelayproject",
+                credential: "openrelayproject"
+              },
+              {
+                urls: "turn:openrelay.metered.ca:443?transport=tcp",
+                username: "openrelayproject",
+                credential: "openrelayproject"
+              }
+            ]
+          }
         });
 
         peer.on('open', id => {
           addParticipant(id, true);
 
-          // Découverte des autres peers du même canal
-          fetch(`https://five-peerjs.onrender.com/peerjs/peers`).then(r=>r.json()).then(list=>{
-            list.filter(pid => pid.startsWith('five-'+channel+'-') && pid !== id).forEach(pid => {
-              const call = peer.call(pid, localStream);
-              setupCallHandlers(call, pid);
+          // Try to discover other peers (if server supports /peers endpoint)
+          fetch(`https://five-peerjs.onrender.com/peerjs/peers`)
+            .then(async r => {
+              try {
+                const text = await r.text();
+                const list = JSON.parse(text);
+                if (Array.isArray(list)) {
+                  list.filter(pid => pid.startsWith('five-'+channel+'-') && pid !== id).forEach(pid => {
+                    // We'll ask location to new peer via a DataConnection
+                    const dc = peer.connect(pid);
+                    dc.on('open', () => {
+                      dc.send({type:'request-location'});
+                      dc.on('data', data => {
+                        if (data.type === 'location' && checkDistance(userLocation, selectedRadius, data.lat, data.lon)) {
+                          const call = peer.call(pid, localStream);
+                          setupCallHandlers(call, pid);
+                        }
+                      });
+                    });
+                  });
+                }
+              } catch (e) {
+                console.warn("Impossible d'obtenir la liste des peers sur ce serveur PeerJS. Les appels entrants fonctionneront, mais les appels sortants sont limités.");
+              }
+            });
+        });
+
+        // Data connection to reply to location requests
+        peer.on('connection', conn => {
+          conn.on('data', data => {
+            if (data.type === 'request-location' && userLocation) {
+              conn.send({type:'location', lat:userLocation.lat, lon:userLocation.lon});
+            }
+          });
+        });
+
+        // Accept incoming calls only if within radius
+        peer.on('call', call => {
+          call.peerConnection.oniceconnectionstatechange = () => {
+            // ICE state for debugging
+            // console.log("ICE State for", call.peer, call.peerConnection.iceConnectionState);
+          };
+          // Ask remote for their location before answering
+          const conn = peer.connect(call.peer);
+          conn.on('open', () => {
+            conn.send({type:'request-location'});
+            conn.on('data', data => {
+              const selectedRadius = Number(document.querySelector('input[name="radius"]:checked').value);
+              if (data.type === 'location' && userLocation && checkDistance(userLocation, selectedRadius, data.lat, data.lon)) {
+                call.answer(localStream);
+                setupCallHandlers(call, call.peer);
+                playBeep();
+              } else {
+                call.close();
+                conn.close();
+                alert("A user tried to connect from outside the allowed radius.");
+              }
             });
           });
         });
 
-        peer.on('call', call => {
-          if (checkDistance(userLocation, selectedRadius)) {
-            call.answer(localStream);
-            setupCallHandlers(call, call.peer);
-            playBeep();
-          } else {
-            console.log("Connection blocked due to distance limit.");
-          }
+        peer.on('error', err => {
+          console.error('Peer error:', err);
         });
 
         peers = {};
@@ -185,18 +274,23 @@
     function setupCallHandlers(call, pid) {
       peers[pid] = call;
       call.on('stream', remoteStream => {
+        console.log("playStream called for", pid, remoteStream);
         if (!audioElements[pid]) playStream(pid, remoteStream);
       });
       call.on('close', () => {
         removeParticipant(pid);
+      });
+      call.on('error', err => {
+        console.error('Call error:', err);
       });
     }
 
     function playStream(id, stream) {
       let audio = document.createElement('audio');
       audio.srcObject = stream;
-      audio.autoplay = false; // Important: l'utilisateur doit cliquer pour activer
+      audio.autoplay = false; // L'utilisateur doit cliquer pour activer
       audio.playsInline = true;
+      audio.volume = 1;
       audioElements[id] = audio;
       addParticipant(id, false);
       showPlayButtonForAudio(id, audio);
@@ -204,9 +298,7 @@
     }
 
     function showPlayButtonForAudio(id, audio) {
-      // Crée un bouton pour activer le son
-      if (audioPlayButtons[id]) return; // déjà créé
-
+      if (audioPlayButtons[id]) return;
       const container = document.getElementById('audio-buttons');
       const btnDiv = document.createElement('div');
       btnDiv.className = "audio-btns";
@@ -252,7 +344,6 @@
     }
 
     function updateAllAudioBtnVisibility() {
-      // Affiche le bouton global si plusieurs flux à activer
       const btn = document.getElementById('all-audio-btn');
       const nAudio = Object.keys(audioPlayButtons).length;
       btn.style.display = nAudio > 0 ? "inline-block" : "none";
@@ -261,7 +352,7 @@
     function toggleMic() {
       micEnabled = !micEnabled;
       if(localStream) localStream.getAudioTracks()[0].enabled = micEnabled;
-      updateMicIndicator(peer.id, micEnabled);
+      if(peer) updateMicIndicator(peer.id, micEnabled);
     }
 
     function setVolume(val) {
@@ -325,9 +416,23 @@
       }
     }
 
-    function checkDistance(userLoc, radiusKm) {
-      // Pour la démo : toujours vrai
-      return true;
+    // Haversine formula
+    function getDistanceKm(lat1, lon1, lat2, lon2) {
+      function toRad(x) { return x * Math.PI / 180; }
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+
+    function checkDistance(userLoc, radiusKm, remoteLat, remoteLon) {
+      if (!userLoc || typeof remoteLat !== "number" || typeof remoteLon !== "number") return false;
+      const d = getDistanceKm(userLoc.lat, userLoc.lon, remoteLat, remoteLon);
+      return d <= radiusKm;
     }
 
     function playBeep() {
