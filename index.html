@@ -16,7 +16,6 @@
       color: #00fff7;
       font-size: 2.5em;
       text-shadow: 0 0 10px #00fff7;
-      margin-bottom: 8px;
     }
     .channels { display: flex; justify-content: center; gap: 12px; margin: 20px 0; flex-wrap: wrap; }
     button {
@@ -31,7 +30,7 @@
       box-shadow: 0 0 8px rgba(0,255,247,0.4);
     }
     button:hover { background-color: #00fff7; color: #111; box-shadow: 0 0 15px #00fff7; }
-    .controls { margin: 20px 0; display: flex; align-items: center; justify-content: center; gap: 18px; }
+    .controls { margin: 20px 0; }
     .visualizer { display: flex; align-items: flex-end; height: 60px; gap: 4px; justify-content: center; margin-top: 20px; }
     .bar { width: 6px; background: #00fff7; height: 5px; transition: height 0.1s; border-radius: 2px; }
     #participants { margin-top: 20px; text-align: left; max-width: 400px; margin-left: auto; margin-right: auto; background: rgba(0,0,0,0.4); padding: 12px; border-radius: 10px; }
@@ -66,32 +65,22 @@
       font-size: 1.05em;
       box-shadow: 0 0 8px #1ce2cc;
       cursor: pointer;
-      display: none;
     }
     #all-audio-btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
-    }
-    #geo-msg, #status-msg {
-      color: #f66;
-      margin: 10px 0 0 0;
-      font-size: 1em;
-      font-weight: bold;
-    }
-    #status-msg {
-      color: #0f0;
     }
   </style>
 </head>
 <body>
   <h1>Five</h1>
   <p>Select a channel to join the audio conference:</p>
+
   <div class="geo-options">
     <label><input type="radio" name="radius" value="5"> Limit to 5 km</label>
     <label style="margin-left:15px;"><input type="radio" name="radius" value="25" checked> Limit to 25 km</label>
   </div>
-  <div id="geo-msg"></div>
-  <div id="status-msg"></div>
+
   <div class="channels">
     <button onclick="joinChannel(1)">1</button>
     <button onclick="joinChannel(2)">2</button>
@@ -99,19 +88,24 @@
     <button onclick="joinChannel(4)">4</button>
     <button onclick="joinChannel(5)">5</button>
   </div>
+  
   <div class="controls">
     <button onclick="toggleMic()">🎤 Mic ON/OFF</button>
     <input type="range" id="volume" min="0" max="1" step="0.01" value="1" onchange="setVolume(this.value)">
   </div>
+
   <div class="visualizer" id="visualizer"></div>
+
   <div id="participants">
     <h3>Connected participants</h3>
     <div id="list"></div>
   </div>
+
   <div id="audio-buttons"></div>
   <div>
-    <button id="all-audio-btn" onclick="activateAllAudio()">▶️ Activer tous les sons</button>
+    <button id="all-audio-btn" style="display:none;" onclick="activateAllAudio()">▶️ Activer tous les sons</button>
   </div>
+
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script>
     let localStream = null;
@@ -122,12 +116,7 @@
     let channel = null;
     let micEnabled = true;
     let userLocation = null;
-    let geoAllowed = false;
-    let geoDenied = false;
-    let connectedPeers = new Set();
     const bars = [];
-    const geoMsg = document.getElementById('geo-msg');
-    const statusMsg = document.getElementById('status-msg');
 
     // Setup visualizer
     for (let i = 0; i < 32; i++) {
@@ -137,70 +126,31 @@
       bars.push(bar);
     }
 
-    function updateStatus(message) {
-      statusMsg.textContent = message;
-      console.log('Status:', message);
-    }
-
-    // Geolocation
-    function askGeolocation() {
-      if (!navigator.geolocation) {
-        geoMsg.innerText = "Geolocation not supported by your browser.";
-        geoDenied = true;
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(pos => {
-        userLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        geoAllowed = true;
-        geoDenied = false;
-        geoMsg.innerText = "";
-        updateStatus("Géolocalisation obtenue ✓");
-      }, err => {
-        geoMsg.innerText = "Geolocation denied or unavailable. Audio connection will be blocked.";
-        geoDenied = true;
-        geoAllowed = false;
-        updateStatus("Géolocalisation refusée ✗");
-      }, { enableHighAccuracy: true });
-    }
-    askGeolocation();
+    navigator.geolocation.getCurrentPosition(pos => {
+      userLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+    }, err => {
+      console.warn("Geolocation denied or unavailable.");
+    });
 
     function joinChannel(num) {
-      if (geoDenied) {
-        alert("Geolocation is required to join a channel.");
-        return;
-      }
-      
+      const selectedRadius = document.querySelector('input[name="radius"]:checked').value;
       channel = num;
-      updateStatus(`Connexion au canal ${num}...`);
       playBeep();
 
-      navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      }).then(stream => {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
         localStream = stream;
         setupVisualizer(stream);
-        updateStatus("Microphone configuré ✓");
 
-        if (peer) {
-          peer.destroy();
-        }
+        if (peer) peer.destroy();
 
-        const peerId = 'five-' + channel + '-' + Math.random().toString(36).substr(2, 9);
-        
-        peer = new Peer(peerId, {
+        peer = new Peer('five-' + channel + '-' + Math.random().toString(36).substr(2, 9), {
           host: 'five-peerjs.onrender.com',
           port: 443,
           path: '/',
           secure: true,
-          debug: 1, // Enable debug logs
           config: {
             iceServers: [
               { urls: "stun:stun.l.google.com:19302" },
-              { urls: "stun:stun1.l.google.com:19302" },
               {
                 urls: "turn:openrelay.metered.ca:80",
                 username: "openrelayproject",
@@ -210,307 +160,138 @@
                 urls: "turn:openrelay.metered.ca:443",
                 username: "openrelayproject",
                 credential: "openrelayproject"
+              },
+              {
+                urls: "turn:openrelay.metered.ca:443?transport=tcp",
+                username: "openrelayproject",
+                credential: "openrelayproject"
               }
             ]
           }
         });
 
         peer.on('open', id => {
-          updateStatus(`Connecté avec l'ID: ${id.substring(0, 10)}...`);
           addParticipant(id, true);
-          
-          // Découverte des autres peers - Version simplifiée
-          setTimeout(() => discoverPeers(), 1000);
-        });
 
-        peer.on('connection', dataConn => {
-          updateStatus("Connexion de données reçue");
-          
-          dataConn.on('data', data => {
-            if (data.type === 'request-location' && userLocation) {
-              dataConn.send({
-                type: 'location', 
-                lat: userLocation.lat, 
-                lon: userLocation.lon
-              });
-            }
-          });
-        });
-
-        peer.on('call', incomingCall => {
-          updateStatus(`Appel entrant de ${incomingCall.peer.substring(0, 10)}...`);
-          
-          // Demander la géolocalisation avant d'accepter
-          const dataConn = peer.connect(incomingCall.peer);
-          
-          dataConn.on('open', () => {
-            dataConn.send({type: 'request-location'});
-            
-            const timeout = setTimeout(() => {
-              updateStatus("Timeout - fermeture de l'appel");
-              incomingCall.close();
-              dataConn.close();
-            }, 5000);
-
-            dataConn.on('data', data => {
-              clearTimeout(timeout);
-              const selectedRadius = Number(document.querySelector('input[name="radius"]:checked').value);
-              
-              if (data.type === 'location' && userLocation && 
-                  checkDistance(userLocation, selectedRadius, data.lat, data.lon)) {
-                
-                updateStatus("Distance OK - Acceptation de l'appel");
-                incomingCall.answer(localStream);
-                setupCallHandlers(incomingCall, incomingCall.peer);
-                playBeep();
-              } else {
-                updateStatus("Distance trop grande - Rejet de l'appel");
-                incomingCall.close();
-                dataConn.close();
+          // Tentative de découverte des autres peers du même canal (si le serveur le permet)
+          fetch(`https://five-peerjs.onrender.com/peerjs/peers`)
+            .then(async r => {
+              try {
+                const text = await r.text();
+                const list = JSON.parse(text);
+                if (Array.isArray(list)) {
+                  list.filter(pid => pid.startsWith('five-'+channel+'-') && pid !== id).forEach(pid => {
+                    const call = peer.call(pid, localStream);
+                    setupCallHandlers(call, pid);
+                  });
+                } else {
+                  console.warn("La liste des peers n'est pas un tableau :", list);
+                }
+              } catch (e) {
+                console.warn("Impossible d'obtenir la liste des peers sur ce serveur PeerJS. Les appels entrants fonctionneront, mais les appels sortants sont limités.");
               }
             });
-          });
+        });
+
+        peer.on('call', call => {
+          if (checkDistance(userLocation, selectedRadius)) {
+            call.answer(localStream);
+            setupCallHandlers(call, call.peer);
+            playBeep();
+          } else {
+            console.log("Connection blocked due to distance limit.");
+          }
         });
 
         peer.on('error', err => {
           console.error('Peer error:', err);
-          updateStatus(`Erreur Peer: ${err.type}`);
         });
 
-        // Réinitialiser les structures
         peers = {};
         audioElements = {};
         audioPlayButtons = {};
-        connectedPeers.clear();
         document.getElementById('list').innerHTML = '';
         document.getElementById('audio-buttons').innerHTML = '';
         document.getElementById('all-audio-btn').style.display = "none";
-        
-      }).catch(err => {
-        console.error('Error accessing microphone:', err);
-        updateStatus("Erreur d'accès au microphone");
       });
     }
 
-    function discoverPeers() {
-      // Tentative de découverte des peers existants
-      fetch(`https://five-peerjs.onrender.com/peerjs/peers`)
-        .then(r => r.json())
-        .then(peerList => {
-          if (Array.isArray(peerList)) {
-            const relevantPeers = peerList.filter(pid => 
-              pid.startsWith('five-' + channel + '-') && 
-              pid !== peer.id &&
-              !connectedPeers.has(pid)
-            );
-            
-            updateStatus(`${relevantPeers.length} peers trouvés sur le canal`);
-            
-            relevantPeers.forEach(pid => {
-              setTimeout(() => connectToPeer(pid), Math.random() * 2000);
-            });
-          }
-        })
-        .catch(err => {
-          console.warn("Impossible d'obtenir la liste des peers:", err);
-          updateStatus("Discovery manuel - attendez les connexions entrantes");
-        });
-    }
-
-    function connectToPeer(peerId) {
-      if (connectedPeers.has(peerId)) return;
-      
-      updateStatus(`Tentative de connexion à ${peerId.substring(0, 10)}...`);
-      
-      const dataConn = peer.connect(peerId);
-      
-      dataConn.on('open', () => {
-        dataConn.send({type: 'request-location'});
-        
-        const timeout = setTimeout(() => {
-          updateStatus("Timeout - abandon de la connexion");
-          dataConn.close();
-        }, 5000);
-
-        dataConn.on('data', data => {
-          clearTimeout(timeout);
-          const selectedRadius = Number(document.querySelector('input[name="radius"]:checked').value);
-          
-          if (data.type === 'location' && userLocation && 
-              checkDistance(userLocation, selectedRadius, data.lat, data.lon)) {
-            
-            updateStatus("Distance OK - Lancement de l'appel");
-            const call = peer.call(peerId, localStream);
-            if (call) {
-              setupCallHandlers(call, peerId);
-              connectedPeers.add(peerId);
-            }
-          } else {
-            updateStatus("Distance trop grande");
-            dataConn.close();
-          }
-        });
-      });
-
-      dataConn.on('error', err => {
-        console.error('Data connection error:', err);
-        updateStatus(`Erreur de connexion de données: ${err}`);
-      });
-    }
-
-    function setupCallHandlers(call, peerId) {
-      if (peers[peerId]) return; // Éviter les doublons
-      
-      peers[peerId] = call;
-      connectedPeers.add(peerId);
-      
+    function setupCallHandlers(call, pid) {
+      peers[pid] = call;
       call.on('stream', remoteStream => {
-        updateStatus(`Réception du flux audio de ${peerId.substring(0, 10)}`);
-        console.log("Stream received from", peerId, remoteStream);
-        
-        // Vérifier que le stream a des pistes audio
-        const audioTracks = remoteStream.getAudioTracks();
-        if (audioTracks.length > 0) {
-          playStream(peerId, remoteStream);
-        } else {
-          console.warn("No audio tracks in received stream");
-          updateStatus("Aucune piste audio reçue");
-        }
+        console.log("playStream called for", pid, remoteStream);
+        if (!audioElements[pid]) playStream(pid, remoteStream);
       });
-      
       call.on('close', () => {
-        updateStatus(`Appel fermé avec ${peerId.substring(0, 10)}`);
-        removeParticipant(peerId);
-        connectedPeers.delete(peerId);
+        removeParticipant(pid);
       });
-      
       call.on('error', err => {
-        console.error('Call error with', peerId, err);
-        updateStatus(`Erreur d'appel: ${err}`);
-        removeParticipant(peerId);
-        connectedPeers.delete(peerId);
+        console.error('Call error:', err);
       });
-
-      // Monitoring de la connexion ICE
-      call.peerConnection.oniceconnectionstatechange = () => {
-        const state = call.peerConnection.iceConnectionState;
-        console.log(`ICE State for ${peerId}:`, state);
-        
-        if (state === 'connected' || state === 'completed') {
-          updateStatus(`Connexion établie avec ${peerId.substring(0, 10)} ✓`);
-        } else if (state === 'failed' || state === 'disconnected') {
-          updateStatus(`Connexion échouée avec ${peerId.substring(0, 10)} ✗`);
-        }
-      };
     }
 
-    function playStream(peerId, stream) {
-      if (audioElements[peerId]) {
-        console.log("Audio element already exists for", peerId);
-        return;
-      }
-
-      const audio = document.createElement('audio');
+    function playStream(id, stream) {
+      let audio = document.createElement('audio');
       audio.srcObject = stream;
-      audio.autoplay = false; // Important pour éviter les blocages navigateur
+      audio.autoplay = false; // L'utilisateur doit cliquer pour activer
       audio.playsInline = true;
-      audio.volume = document.getElementById('volume').value;
-      
-      // Ajouter l'élément audio au DOM (nécessaire pour certains navigateurs)
-      audio.style.display = 'none';
-      document.body.appendChild(audio);
-      
-      audioElements[peerId] = audio;
-      addParticipant(peerId, false);
-      
-      // Créer immédiatement le bouton de lecture
-      showPlayButtonForAudio(peerId, audio);
+      audio.volume = 1;
+      audioElements[id] = audio;
+      addParticipant(id, false);
+      showPlayButtonForAudio(id, audio);
       updateAllAudioBtnVisibility();
-      
-      // Tentative de lecture automatique (peut échouer selon le navigateur)
-      audio.play().then(() => {
-        console.log("Audio playing automatically for", peerId);
-        updateStatus(`Audio automatique activé pour ${peerId.substring(0, 10)}`);
-        // Masquer le bouton si la lecture automatique fonctionne
-        if (audioPlayButtons[peerId]) {
-          audioPlayButtons[peerId].remove();
-          delete audioPlayButtons[peerId];
-          updateAllAudioBtnVisibility();
-        }
-      }).catch(err => {
-        console.log("Autoplay blocked for", peerId, "- user interaction required");
-        updateStatus(`Cliquez pour activer l'audio de ${peerId.substring(0, 10)}`);
-      });
     }
 
-    function showPlayButtonForAudio(peerId, audio) {
-      if (audioPlayButtons[peerId]) return;
-      
+    function showPlayButtonForAudio(id, audio) {
+      // Crée un bouton pour activer le son
+      if (audioPlayButtons[id]) return; // déjà créé
+
       const container = document.getElementById('audio-buttons');
       const btnDiv = document.createElement('div');
       btnDiv.className = "audio-btns";
-      btnDiv.id = "btn-audio-" + peerId;
+      btnDiv.id = "btn-audio-"+id;
 
       const btn = document.createElement('button');
-      btn.textContent = `▶️ Activer ${peerId.substring(0, 8)}`;
-      
+      btn.textContent = "▶️ Activer le son de " + id.substring(0, 8);
       btn.onclick = () => {
         audio.play().then(() => {
           btn.textContent = "🔊 Son activé";
           btn.disabled = true;
-          updateStatus(`Audio activé pour ${peerId.substring(0, 10)} ✓`);
-          setTimeout(() => {
-            btnDiv.remove();
-            delete audioPlayButtons[peerId];
-            updateAllAudioBtnVisibility();
-          }, 1200);
+          setTimeout(() => btnDiv.remove(), 1200);
         }).catch(err => {
-          console.error("Play error:", err);
-          updateStatus(`Erreur de lecture pour ${peerId.substring(0, 10)}`);
+          alert("Impossible de lire le son, vérifie les permissions du navigateur.");
         });
       };
-      
       btnDiv.appendChild(btn);
       container.appendChild(btnDiv);
-      audioPlayButtons[peerId] = btnDiv;
+      audioPlayButtons[id] = btnDiv;
       updateAllAudioBtnVisibility();
     }
 
     function activateAllAudio() {
-      const btn = document.getElementById('all-audio-btn');
+      let btn = document.getElementById('all-audio-btn');
       btn.disabled = true;
-      
-      const promises = [];
-      let activatedCount = 0;
-      
-      for (let peerId in audioElements) {
-        if (audioElements[peerId] && audioPlayButtons[peerId]) {
-          const playPromise = audioElements[peerId].play().then(() => {
-            activatedCount++;
-            if (audioPlayButtons[peerId]) {
-              audioPlayButtons[peerId].remove();
-              delete audioPlayButtons[peerId];
-            }
-          }).catch(err => {
-            console.error("Failed to play audio for", peerId, err);
-          });
+      let promises = [];
+      for (let id in audioElements) {
+        if (audioElements[id]) {
+          let playPromise = audioElements[id].play().then(() => {
+            if (audioPlayButtons[id]) audioPlayButtons[id].remove();
+          }).catch(() => {});
           promises.push(playPromise);
         }
       }
-      
-      Promise.allSettled(promises).then(() => {
-        btn.textContent = `🔊 ${activatedCount} sons activés`;
-        updateStatus(`${activatedCount} flux audio activés`);
+      Promise.all(promises).then(() => {
+        btn.textContent = "🔊 Tous les sons sont actifs";
         setTimeout(() => {
           btn.style.display = "none";
           btn.textContent = "▶️ Activer tous les sons";
           btn.disabled = false;
         }, 1400);
-        updateAllAudioBtnVisibility();
       });
     }
 
     function updateAllAudioBtnVisibility() {
+      // Affiche le bouton global si plusieurs flux à activer
       const btn = document.getElementById('all-audio-btn');
       const nAudio = Object.keys(audioPlayButtons).length;
       btn.style.display = nAudio > 0 ? "inline-block" : "none";
@@ -518,141 +299,87 @@
 
     function toggleMic() {
       micEnabled = !micEnabled;
-      if (localStream) {
-        localStream.getAudioTracks().forEach(track => {
-          track.enabled = micEnabled;
-        });
-      }
-      if (peer) {
-        updateMicIndicator(peer.id, micEnabled);
-      }
-      updateStatus(`Micro ${micEnabled ? 'activé' : 'désactivé'}`);
+      if(localStream) localStream.getAudioTracks()[0].enabled = micEnabled;
+      updateMicIndicator(peer.id, micEnabled);
     }
 
     function setVolume(val) {
-      for (let peerId in audioElements) {
-        if (audioElements[peerId]) {
-          audioElements[peerId].volume = parseFloat(val);
-        }
+      for (let id in audioElements) {
+        audioElements[id].volume = val;
       }
     }
 
     function setupVisualizer(stream) {
-      try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const analyser = audioCtx.createAnalyser();
-        const source = audioCtx.createMediaStreamSource(stream);
-        
-        source.connect(analyser);
-        analyser.fftSize = 64;
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
+      const audioCtx = new AudioContext();
+      const analyser = audioCtx.createAnalyser();
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+      analyser.fftSize = 64;
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
 
-        function draw() {
-          requestAnimationFrame(draw);
-          analyser.getByteFrequencyData(dataArray);
-          
-          for (let i = 0; i < Math.min(bars.length, bufferLength); i++) {
-            const height = Math.max(5, (dataArray[i] / 255) * 60);
-            bars[i].style.height = height + 'px';
-          }
+      function draw() {
+        requestAnimationFrame(draw);
+        analyser.getByteFrequencyData(dataArray);
+        for (let i = 0; i < bars.length; i++) {
+          bars[i].style.height = (dataArray[i] / 2) + 'px';
         }
-        draw();
-      } catch (err) {
-        console.error("Visualizer setup error:", err);
       }
+      draw();
     }
 
-    function addParticipant(peerId, isSelf) {
-      if (document.getElementById('p-' + peerId)) return;
-      
+    function addParticipant(id, isSelf) {
+      if (document.getElementById('p-' + id)) return; // éviter doublon
       const div = document.createElement('div');
       div.classList.add('participant');
-      div.id = 'p-' + peerId;
-      
+      div.id = 'p-' + id;
       const indicator = document.createElement('div');
       indicator.classList.add('indicator');
       indicator.classList.add(isSelf && micEnabled ? 'on' : 'off');
-      
       div.appendChild(indicator);
-      div.appendChild(document.createTextNode(
-        isSelf ? `Moi (${peerId.substring(0, 10)}...)` : `${peerId.substring(0, 10)}...`
-      ));
-      
+      div.appendChild(document.createTextNode(isSelf ? `Me (${id})` : id));
       document.getElementById('list').appendChild(div);
     }
 
-    function removeParticipant(peerId) {
-      const div = document.getElementById('p-' + peerId);
+    function removeParticipant(id) {
+      const div = document.getElementById('p-' + id);
       if (div) div.remove();
-      
-      if (audioElements[peerId]) {
-        audioElements[peerId].pause();
-        audioElements[peerId].remove();
-        delete audioElements[peerId];
+      if (audioElements[id]) {
+        audioElements[id].pause();
+        delete audioElements[id];
       }
-      
-      if (audioPlayButtons[peerId]) {
-        audioPlayButtons[peerId].remove();
-        delete audioPlayButtons[peerId];
+      if (audioPlayButtons[id]) {
+        audioPlayButtons[id].remove();
+        delete audioPlayButtons[id];
       }
-      
-      if (peers[peerId]) {
-        delete peers[peerId];
-      }
-      
-      connectedPeers.delete(peerId);
+      if (peers[id]) delete peers[id];
       updateAllAudioBtnVisibility();
     }
 
-    function updateMicIndicator(peerId, state) {
-      const participant = document.getElementById('p-' + peerId);
+    function updateMicIndicator(id, state) {
+      const participant = document.getElementById('p-' + id);
       if (participant) {
         const indicator = participant.querySelector('.indicator');
         indicator.className = 'indicator ' + (state ? 'on' : 'off');
       }
     }
 
-    // Haversine formula
-    function getDistanceKm(lat1, lon1, lat2, lon2) {
-      function toRad(x) { return x * Math.PI / 180; }
-      const R = 6371;
-      const dLat = toRad(lat2 - lat1);
-      const dLon = toRad(lon2 - lon1);
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-                Math.sin(dLon/2) * Math.sin(dLon/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return R * c;
-    }
-
-    function checkDistance(userLoc, radiusKm, remoteLat, remoteLon) {
-      if (!userLoc || typeof remoteLat !== "number" || typeof remoteLon !== "number") {
-        return false;
-      }
-      const distance = getDistanceKm(userLoc.lat, userLoc.lon, remoteLat, remoteLon);
-      console.log(`Distance check: ${distance.toFixed(2)}km <= ${radiusKm}km = ${distance <= radiusKm}`);
-      return distance <= radiusKm;
+    function checkDistance(userLoc, radiusKm) {
+      // Pour la démo : toujours vrai
+      return true;
     }
 
     function playBeep() {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = ctx.createOscillator();
-        const gainNode = ctx.createGain();
-        
-        oscillator.type = "sine";
-        oscillator.frequency.value = 600;
-        gainNode.gain.value = 0.05;
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(ctx.destination);
-        
-        oscillator.start();
-        oscillator.stop(ctx.currentTime + 0.15);
-      } catch (err) {
-        console.error("Beep error:", err);
-      }
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.value = 600;
+      g.gain.value = 0.05;
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start();
+      o.stop(ctx.currentTime + 0.15);
     }
   </script>
 </body>
