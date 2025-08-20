@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Five – Local Audio Chat</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Inter", Arial, sans-serif;
+      background: #0d0d0d;
+      color: #f5f5f5;
+      line-height: 1.6;
+    }
+    header {
+      text-align: center;
+      padding: 60px 20px;
+      background: linear-gradient(135deg, #00adb5, #6a11cb);
+    }
+    header h1 {
+      font-size: 3rem;
+      margin: 0;
+      color: #fff;
+    }
+    header p {
+      font-size: 1.2rem;
+      margin-top: 10px;
+      color: #eee;
+    }
+    .btn {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 14px 28px;
+      font-size: 1.1rem;
+      border: none;
+      border-radius: 30px;
+      background: #ff4c60;
+      color: #fff;
+      cursor: pointer;
+      text-decoration: none;
+      transition: 0.3s;
+    }
+    .btn:hover {
+      background: #ff758c;
+      transform: scale(1.05);
+    }
+    section {
+      max-width: 1000px;
+      margin: 60px auto;
+      padding: 0 20px;
+      text-align: center;
+    }
+    section h2 {
+      font-size: 2rem;
+      margin-bottom: 20px;
+      color: #00adb5;
+    }
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 30px;
+      margin-top: 30px;
+    }
+    .feature {
+      background: #1a1a1a;
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+      transition: transform 0.3s;
+    }
+    .feature:hover { transform: translateY(-5px); }
+    .feature h3 { color: #ff4c60; margin-bottom: 10px; }
+    footer {
+      background: #111;
+      text-align: center;
+      padding: 30px 20px;
+      font-size: 0.9rem;
+      color: #888;
+    }
+    footer a { color: #00adb5; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Five</h1>
+    <p>Local voices, real connections.</p>
+    <a href="index.html" class="btn">🚀 Try the Web App</a>
+    <a href="#" class="btn">📱 Download Android App</a>
+  </header>
+
+  <section>
+    <h2>Why Five?</h2>
+    <div class="features">
+      <div class="feature">
+        <h3>🎤 5 Open Channels</h3>
+        <p>Jump in and talk instantly. No accounts, no passwords. Just choose a number and start speaking.</p>
+      </div>
+      <div class="feature">
+        <h3>📍 Local Connections</h3>
+        <p>Talk only with people within 5 km or 25 km of you. More personal than global chats, closer than social media.</p>
+      </div>
+      <div class="feature">
+        <h3>⚡ Instant & Simple</h3>
+        <p>Works on smartphone or PC. Wi-Fi, 4G, or 5G. Just press and talk — like a modern walkie-talkie.</p>
+      </div>
+      <div class="feature">
+        <h3>🤝 Community</h3>
+        <p>Perfect for neighborhoods, campuses, events, or meeting locals around you.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How it Works</h2>
+    <p>
+      Select a channel (1–5) and talk with people nearby.  
+      Limit the range to <strong>5 km</strong> for ultra-local conversations, or extend to <strong>25 km</strong> for more voices around you.  
+      That’s it — no complexity, just real-time local audio chat.
+    </p>
+  </section>
+
+  <footer>
+    <p>© 2025 Five. Made for local communities. <br>
+    <a href="#">Privacy Policy</a> • <a href="#">Contact</a></p>
+  </footer>
+</body>
+</html>
