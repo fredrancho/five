@@ -5,39 +5,86 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Five - Audio Conference</title>
   <style>
+    :root {
+      --bg: #0b0f14;
+      --text: #f0f0f0;
+      --accent: #00f7ff;
+      --accent2: #ff00ff;
+      --danger: #ff4444;
+      --success: #39ff14;
+    }
     body {
-      background-color: #0d0d0d;
-      color: #f0f0f0;
+      background: var(--bg);
+      color: var(--text);
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       text-align: center;
       padding: 20px;
       transition: background 0.5s, color 0.5s;
     }
-    h1 { font-size: 2.5em; margin-bottom: 10px; text-shadow: 0 0 10px #00f7ff; }
-    .channels { display: flex; justify-content: center; gap: 12px; margin: 20px 0; flex-wrap: wrap; }
-    button {
-      background-color: #111;
-      border: 2px solid #00f7ff;
+    h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+      text-shadow: 0 0 12px var(--accent);
+    }
+    .channels {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin: 20px 0;
+      flex-wrap: wrap;
+    }
+    button, select {
+      background: #111;
+      border: 2px solid var(--accent);
       border-radius: 12px;
-      color: #f0f0f0;
-      padding: 12px 24px;
+      color: var(--text);
+      padding: 12px 20px;
       cursor: pointer;
       transition: all 0.3s;
       font-weight: bold;
-      text-shadow: 0 0 5px #00f7ff;
+      text-shadow: 0 0 6px var(--accent);
     }
-    button:hover { background-color: #00f7ff; color: #111; box-shadow: 0 0 12px #00f7ff; }
+    button:hover, select:hover {
+      background: var(--accent);
+      color: #111;
+      box-shadow: 0 0 15px var(--accent);
+    }
+    select {
+      appearance: none;
+      font-size: 1em;
+    }
     .controls { margin: 20px 0; }
-    .visualizer { display: flex; align-items: flex-end; height: 60px; gap: 4px; justify-content: center; margin-top: 20px; }
-    .bar { width: 6px; background: #00f7ff; height: 5px; transition: height 0.1s; border-radius: 2px; }
-    #participants { margin-top: 20px; text-align: left; max-width: 400px; margin-left: auto; margin-right: auto; }
-    #participants h3 { color: #00f7ff; text-shadow: 0 0 5px #00f7ff; }
-    .participant { display: flex; align-items: center; margin-bottom: 5px; }
-    .indicator { width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
-    .on { background: #0f0; box-shadow: 0 0 5px #0f0; }
-    .off { background: #f00; box-shadow: 0 0 5px #f00; }
-    select { padding: 8px; border-radius: 8px; border: none; font-size: 1em; margin: 10px; }
-    #themeMenu { margin: 20px 0; }
+    .visualizer {
+      display: flex;
+      align-items: flex-end;
+      height: 70px;
+      gap: 4px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    .bar {
+      width: 6px;
+      background: var(--accent);
+      height: 5px;
+      transition: height 0.1s;
+      border-radius: 3px;
+    }
+    #participants {
+      margin-top: 20px;
+      text-align: left;
+      max-width: 420px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #participants h3 {
+      color: var(--accent);
+      text-shadow: 0 0 8px var(--accent);
+    }
+    .participant { display: flex; align-items: center; margin-bottom: 6px; }
+    .indicator { width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; }
+    .on { background: var(--success); box-shadow: 0 0 8px var(--success); }
+    .off { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+    #themeMenu { margin: 25px 0; }
   </style>
 </head>
 <body>
@@ -64,7 +111,6 @@
 
   <div class="controls">
     <button onclick="toggleMic()">🎤 Mic ON/OFF</button>
-    <input type="range" id="volume" min="0" max="1" step="0.01" value="1" onchange="setVolume(this.value)">
   </div>
 
   <div class="visualizer" id="visualizer"></div>
@@ -76,11 +122,11 @@
 
   <div id="themeMenu">
     <p>Choose a theme:</p>
-    <button onclick="setTheme('neonBlue')">Neon Blue</button>
-    <button onclick="setTheme('acidGreen')">Acid Green</button>
-    <button onclick="setTheme('cyberPink')">Cyber Pink</button>
-    <button onclick="setTheme('sunsetOrange')">Sunset Orange</button>
-    <button onclick="setTheme('retroPurple')">Retro Purple</button>
+    <button onclick="setTheme('neonCyanMagenta')">Neon Cyan/Magenta</button>
+    <button onclick="setTheme('acidGreenYellow')">Acid Green/Yellow</button>
+    <button onclick="setTheme('cyberPinkBlue')">Cyber Pink/Blue</button>
+    <button onclick="setTheme('sunsetOrangePurple')">Sunset Orange/Purple</button>
+    <button onclick="setTheme('retroPurpleAqua')">Retro Purple/Aqua</button>
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -152,12 +198,6 @@
       updateMicIndicator("self", micEnabled);
     }
 
-    function setVolume(val) {
-      for (let id in audioElements) {
-        audioElements[id].volume = val;
-      }
-    }
-
     function setupVisualizer(stream) {
       const audioCtx = new AudioContext();
       const analyser = audioCtx.createAnalyser();
@@ -214,22 +254,30 @@
 
     // THEME SWITCHER
     function setTheme(theme) {
-      const body = document.body;
-      const barsEl = document.querySelectorAll('.bar');
       switch(theme) {
-        case 'neonBlue': body.style.background = '#0d0d0d'; body.style.color = '#f0f0f0'; setAccent('#00f7ff'); break;
-        case 'acidGreen': body.style.background = '#0d0d0d'; body.style.color = '#eaffea'; setAccent('#39ff14'); break;
-        case 'cyberPink': body.style.background = '#0d0d0d'; body.style.color = '#ffe6f7'; setAccent('#ff007f'); break;
-        case 'sunsetOrange': body.style.background = '#0d0d0d'; body.style.color = '#fff2e6'; setAccent('#ff6600'); break;
-        case 'retroPurple': body.style.background = '#0d0d0d'; body.style.color = '#f5e6ff'; setAccent('#a600ff'); break;
+        case 'neonCyanMagenta':
+          document.documentElement.style.setProperty('--accent', '#00f7ff');
+          document.documentElement.style.setProperty('--accent2', '#ff00ff');
+          break;
+        case 'acidGreenYellow':
+          document.documentElement.style.setProperty('--accent', '#39ff14');
+          document.documentElement.style.setProperty('--accent2', '#ffff00');
+          break;
+        case 'cyberPinkBlue':
+          document.documentElement.style.setProperty('--accent', '#ff007f');
+          document.documentElement.style.setProperty('--accent2', '#00c3ff');
+          break;
+        case 'sunsetOrangePurple':
+          document.documentElement.style.setProperty('--accent', '#ff6600');
+          document.documentElement.style.setProperty('--accent2', '#9932cc');
+          break;
+        case 'retroPurpleAqua':
+          document.documentElement.style.setProperty('--accent', '#a600ff');
+          document.documentElement.style.setProperty('--accent2', '#00ffd5');
+          break;
       }
-      function setAccent(color) {
-        document.querySelectorAll('button').forEach(btn => { btn.style.borderColor = color; btn.style.textShadow = `0 0 5px ${color}`; });
-        barsEl.forEach(b => b.style.background = color);
-        document.querySelector('#participants h3').style.color = color;
-        document.querySelector('#participants h3').style.textShadow = `0 0 5px ${color}`;
-        document.querySelector('h1').style.textShadow = `0 0 10px ${color}`;
-      }
+      document.querySelector('h1').style.textShadow = `0 0 12px var(--accent)`;
+      document.querySelector('#participants h3').style.textShadow = `0 0 8px var(--accent)`;
     }
   </script>
 </body>
