@@ -121,12 +121,14 @@
   </div>
 
   <div id="themeMenu">
-    <p>Choose a theme:</p>
-    <button onclick="setTheme('neonCyanMagenta')">Neon Cyan/Magenta</button>
-    <button onclick="setTheme('acidGreenYellow')">Acid Green/Yellow</button>
-    <button onclick="setTheme('cyberPinkBlue')">Cyber Pink/Blue</button>
-    <button onclick="setTheme('sunsetOrangePurple')">Sunset Orange/Purple</button>
-    <button onclick="setTheme('retroPurpleAqua')">Retro Purple/Aqua</button>
+    <label for="themeSelect">Choose a theme:</label>
+    <select id="themeSelect" onchange="setTheme(this.value)">
+      <option value="neonCyanMagenta" selected>Neon Cyan/Magenta</option>
+      <option value="acidGreenYellow">Acid Green/Yellow</option>
+      <option value="cyberPinkBlue">Cyber Pink/Blue</option>
+      <option value="sunsetOrangePurple">Sunset Orange/Purple</option>
+      <option value="retroPurpleAqua">Retro Purple/Aqua</option>
+    </select>
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -153,6 +155,9 @@
     });
 
     function joinChannel(num) {
+      // Quitter l’ancien canal s’il existe
+      leaveChannel();
+
       channel = num;
       navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
         localStream = stream;
@@ -182,6 +187,24 @@
 
         peers["self"] = peer;
       });
+    }
+
+    function leaveChannel() {
+      // Fermer le peer courant
+      if (peers["self"]) {
+        peers["self"].destroy();
+      }
+
+      // Stopper tous les flux audio
+      for (let id in audioElements) {
+        audioElements[id].srcObject = null;
+        audioElements[id].remove();
+      }
+
+      // Réinitialiser
+      peers = {};
+      audioElements = {};
+      document.getElementById('list').innerHTML = '';
     }
 
     function playStream(id, stream) {
