@@ -85,6 +85,13 @@
     .on { background: var(--success); box-shadow: 0 0 8px var(--success); }
     .off { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
     #themeMenu { margin: 25px 0; }
+    .status {
+      margin: 15px 0;
+      padding: 10px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 8px;
+      font-size: 0.9em;
+    }
   </style>
 </head>
 <body>
@@ -97,6 +104,8 @@
     <button onclick="joinChannel(4)">4</button>
     <button onclick="joinChannel(5)">5</button>
   </div>
+
+  <div class="status" id="status">Not connected</div>
 
   <div>
     <label for="distance">Max distance:</label>
@@ -111,6 +120,7 @@
 
   <div class="controls">
     <button onclick="toggleMic()">🎤 Mic ON/OFF</button>
+    <button onclick="leaveChannel()">🚪 Leave Channel</button>
   </div>
 
   <div class="visualizer" id="visualizer"></div>
@@ -140,7 +150,9 @@
     let micEnabled = true;
     let maxDistance = 'global';
     let myPosition = null;
+    let myPeerId = null;
     const bars = [];
+    let heartbeatInterval = null;
 
     // Setup visualizer
     for (let i = 0; i < 32; i++) {
@@ -154,12 +166,18 @@
       myPosition = { lat: pos.coords.latitude, lon: pos.coords.longitude };
     });
 
-    function joinChannel(num) {
-      // Quitter l’ancien canal s’il existe
-      leaveChannel();
+    function updateStatus(msg) {
+      document.getElementById('status').textContent = msg;
+    }
+
+    async function joinChannel(num) {
+      // Quitter l'ancien canal s'il existe
+      await leaveChannel();
 
       channel = num;
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      updateStatus(`Connecting to channel ${num}...`);
+
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(async stream => {
         localStream = stream;
         setupVisualizer(stream);
 
@@ -172,27 +190,144 @@
           config: config
         });
 
-        peer.on('open', id => {
+        peer.on('open', async id => {
+          myPeerId = id;
           addParticipant(id, true);
+          updateStatus(`Connected to channel ${channel} (ID: ${id.substring(0, 8)}...)`);
+          
+          // Enregistrer ce pair dans le canal
+          await registerPeer(channel, id);
+          
+          // Découvrir et appeler les pairs existants
+          await connectToExistingPeers(peer, channel, id);
+          
+          // Heartbeat pour maintenir la présence
+          heartbeatInterval = setInterval(() => {
+            registerPeer(channel, id);
+          }, 10000);
         });
 
         peer.on('call', call => {
+          console.log('Receiving call from:', call.peer);
           call.answer(localStream);
           call.on('stream', remoteStream => {
+            console.log('Receiving stream from:', call.peer);
             if (isWithinDistance(call.metadata)) {
               playStream(call.peer, remoteStream);
             }
           });
         });
 
+        peer.on('error', err => {
+          console.error('Peer error:', err);
+          updateStatus(`Error: ${err.type}`);
+        });
+
         peers["self"] = peer;
+      }).catch(err => {
+        alert('Erreur microphone: ' + err.message);
+        updateStatus('Microphone access denied');
       });
     }
 
-    function leaveChannel() {
+    async function registerPeer(channelNum, peerId) {
+      try {
+        const key = `channel_${channelNum}_peers`;
+        let peerList = [];
+        
+        try {
+          const result = await window.storage.get(key, true);
+          if (result && result.value) {
+            peerList = JSON.parse(result.value);
+          }
+        } catch (e) {
+          // Clé n'existe pas encore
+        }
+        
+        // Ajouter ce pair avec timestamp
+        const now = Date.now();
+        peerList = peerList.filter(p => p.id !== peerId && (now - p.time) < 30000); // Garder pairs actifs < 30s
+        peerList.push({ id: peerId, time: now });
+        
+        await window.storage.set(key, JSON.stringify(peerList), true);
+        console.log('Registered peer in channel:', channelNum, 'Total peers:', peerList.length);
+      } catch (err) {
+        console.error('Storage error:', err);
+      }
+    }
+
+    async function connectToExistingPeers(peer, channelNum, myId) {
+      try {
+        const key = `channel_${channelNum}_peers`;
+        const result = await window.storage.get(key, true);
+        
+        if (result && result.value) {
+          const peerList = JSON.parse(result.value);
+          const now = Date.now();
+          
+          for (let p of peerList) {
+            // Appeler les pairs actifs (sauf soi-même)
+            if (p.id !== myId && (now - p.time) < 30000) {
+              console.log('Calling existing peer:', p.id);
+              setTimeout(() => {
+                callPeer(peer, p.id);
+              }, 500);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error connecting to peers:', err);
+      }
+    }
+
+    function callPeer(peer, remotePeerId) {
+      if (!localStream || !peer) return;
+      
+      const metadata = myPosition ? { lat: myPosition.lat, lon: myPosition.lon } : {};
+      console.log('Calling peer:', remotePeerId);
+      const call = peer.call(remotePeerId, localStream, { metadata });
+      
+      call.on('stream', remoteStream => {
+        console.log('Received stream from:', remotePeerId);
+        playStream(remotePeerId, remoteStream);
+      });
+      
+      call.on('error', err => {
+        console.error('Call error:', err);
+      });
+    }
+
+    async function leaveChannel() {
+      // Arrêter le heartbeat
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
+
+      // Retirer ce pair de la liste
+      if (channel && myPeerId) {
+        try {
+          const key = `channel_${channel}_peers`;
+          const result = await window.storage.get(key, true);
+          if (result && result.value) {
+            let peerList = JSON.parse(result.value);
+            peerList = peerList.filter(p => p.id !== myPeerId);
+            await window.storage.set(key, JSON.stringify(peerList), true);
+          }
+        } catch (err) {
+          console.error('Error leaving channel:', err);
+        }
+      }
+
       // Fermer le peer courant
       if (peers["self"]) {
         peers["self"].destroy();
+      }
+
+      // Stopper le stream local
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
       }
 
       // Stopper tous les flux audio
@@ -204,15 +339,32 @@
       // Réinitialiser
       peers = {};
       audioElements = {};
+      myPeerId = null;
+      channel = null;
       document.getElementById('list').innerHTML = '';
+      updateStatus('Not connected');
     }
 
     function playStream(id, stream) {
+      // Éviter les doublons
+      if (audioElements[id]) {
+        audioElements[id].srcObject = null;
+        audioElements[id].remove();
+      }
+
       let audio = document.createElement('audio');
       audio.srcObject = stream;
       audio.autoplay = true;
+      audio.volume = 1.0;
+      document.body.appendChild(audio); // Ajouter au DOM
       audioElements[id] = audio;
-      addParticipant(id, false);
+      
+      // Ajouter le participant s'il n'existe pas déjà
+      if (!document.getElementById('p-' + id)) {
+        addParticipant(id, false);
+      }
+
+      console.log('Playing stream for:', id);
     }
 
     function toggleMic() {
@@ -241,6 +393,9 @@
     }
 
     function addParticipant(id, isSelf) {
+      // Éviter les doublons
+      if (document.getElementById('p-' + id)) return;
+
       const div = document.createElement('div');
       div.classList.add('participant');
       div.id = 'p-' + id;
@@ -248,7 +403,8 @@
       indicator.classList.add('indicator');
       indicator.classList.add(isSelf && micEnabled ? 'on' : 'off');
       div.appendChild(indicator);
-      div.appendChild(document.createTextNode(isSelf ? `Me (${id})` : id));
+      const shortId = id.length > 12 ? id.substring(0, 12) + '...' : id;
+      div.appendChild(document.createTextNode(isSelf ? `Me (${shortId})` : shortId));
       document.getElementById('list').appendChild(div);
     }
 
